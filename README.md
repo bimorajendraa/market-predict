@@ -1,8 +1,6 @@
 # Finance Analytics
 
-End-to-end Python platform for financial data collection, parsing, scoring, sentiment analysis, and automated summary generation.
-
-> Evolved from **finance-scraper** — original scraping pipeline is fully preserved.
+End-to-end Python for financial data collection, parsing, scoring, sentiment analysis, and automated summary generation.
 
 ## Features
 
