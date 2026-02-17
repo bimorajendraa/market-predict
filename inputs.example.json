@@ -1,0 +1,50 @@
+{
+  "description": "Example input configuration for finance-analytics",
+  "rss_feeds": [
+    {
+      "name": "Yahoo Finance - BBCA.JK",
+      "url": "https://feeds.finance.yahoo.com/rss/2.0/headline?s=BBCA.JK&region=ID&lang=id-ID",
+      "description": "Yahoo Finance news feed for Bank BCA"
+    },
+    {
+      "name": "CNBC Indonesia - Market",
+      "url": "https://www.cnbcindonesia.com/market/rss",
+      "description": "CNBC Indonesia market news feed"
+    },
+    {
+      "name": "CNBC Indonesia - Investment",
+      "url": "https://www.cnbcindonesia.com/investment/rss",
+      "description": "CNBC Indonesia investment news feed"
+    },
+    {
+      "name": "Kontan - Investasi",
+      "url": "https://rss.kontan.co.id/news/investasi",
+      "description": "Kontan investment news feed"
+    },
+    {
+      "name": "Investing.com Indonesia",
+      "url": "https://id.investing.com/rss/news.rss",
+      "description": "Investing.com Indonesian edition"
+    }
+  ],
+  "report_pages": [
+    {
+      "name": "Apple Investor Relations",
+      "url": "https://investor.apple.com/investor-relations/default.aspx",
+      "ticker": "AAPL",
+      "description": "Apple Inc. investor relations page with SEC filings and reports"
+    },
+    {
+      "name": "Microsoft Investor Relations",
+      "url": "https://www.microsoft.com/en-us/investor",
+      "ticker": "MSFT",
+      "description": "Microsoft Corp. investor relations page"
+    }
+  ],
+  "notes": {
+    "rss_feeds": "Use 'run-news --ticker BBCA.JK' to auto-generate feeds for a specific ticker. Feed URLs above are examples.",
+    "report_pages": "The investor relations pages are examples. The actual page structure varies by company.",
+    "playwright": "Use the --playwright flag for pages that require JavaScript rendering.",
+    "rate_limiting": "The scraper includes built-in rate limiting (1-5 second random delay) and retry logic (3 attempts with exponential backoff)."
+  }
+}
