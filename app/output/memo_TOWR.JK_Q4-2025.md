@@ -1,10 +1,10 @@
 ════════════════════════════════════════════════════════════
   INVESTMENT MEMO: TOWR.JK
   Period: Q4-2025
-  Date: 2026-02-21 20:19 WIB
+  Date: 2026-02-21 21:44 WIB
 ════════════════════════════════════════════════════════════
 
-Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
+Rating: Hold/Watch | Confidence: 40% | Integrity: 72/100
 ────────────────────────────────────────────────────────────
 
 1. COMPANY SNAPSHOT
@@ -13,7 +13,7 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
   Sector: Real Estate — Real Estate Services
   Country: Indonesia
   Employees: 1,884
-  Market Cap: $30.4T
+  Market Cap: Rp 30.4 T
   Website: https://www.ptsmn.co.id
 
   PT Sarana Menara Nusantara Tbk. owns and operates telecommunication towers for wireless operators in Indonesia. It operates in two segments, Tower Rental, and Other Services
@@ -58,25 +58,25 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
 ────────────────────────────────────────
   If any answer changes, revisit the rating.
 
-  Q1. Is revenue growth sustainable or one-time driven?
-      Trigger: If revenue growth < 0% for 2+ consecutive quarters, downgrade.
+  Q1. Is tenancy ratio (tenants per tower) growing?
+      Trigger: If tenancy ratio declines 2+ consecutive quarters, utilization risk.
 
-  Q2. Is the company generating positive free cash flow?
-      Trigger: If FCF negative for 2+ quarters, cash burn concern.
+  Q2. Are average lease terms long enough for revenue visibility?
+      Trigger: If avg lease term < 8 years or shortening, revenue at risk.
 
-  Q3. Is leverage appropriate for the business cycle?
-      Trigger: If D/E > 2.0x and rising, financial risk increases.
+  Q3. Is net debt / EBITDA manageable given capex requirements?
+      Trigger: If net debt/EBITDA > 5x and rising, leverage risk.
 
-  Q4. Is management returning capital effectively?
-      Trigger: If no dividends/buybacks despite positive FCF, governance concern.
+  Q4. Are escalator clauses keeping pace with inflation?
+      Trigger: If escalator rate < CPI, real revenue erosion.
 
-  Q5. Are there regulatory or litigation risks that could impair value?
-      Trigger: Monitor news for regulation changes, lawsuits, or compliance issues.
+  Q5. Is interest coverage sufficient for debt servicing?
+      Trigger: If interest coverage < 2x, debt servicing risk.
 
 
 5. FINANCIAL QUALITY
 ────────────────────────────────────────
-  Composite Score: nan/100 (sector: real_estate)
+  Composite Score: nan/100 (sector: tower_infra)
 
   Factor                Score   Coverage
   ──────────────────── ────── ──────────
@@ -139,30 +139,30 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
     DIVIDEND/YIELD: 3.3x
     FCF/YIELD: 0.1x
 
-  3-STATEMENT MODEL (current: Rev $12973.48B, OpM 57.6%, NetM 26.5%):
+  3-STATEMENT MODEL (current: Rev Rp12973.48B, OpM 57.6%, NetM 26.5%):
   Year      Revenue   OpIncome   OpM%  NetIncome        FCF  Growth
   ────── ────────── ────────── ────── ────────── ────────── ───────
-  Y1     $ 13362.7B $  7697.7B  57.6% $  6081.2B $  6482.1B   3.0%
-  Y2     $ 13763.6B $  7322.8B  53.2% $  5785.0B $  6197.9B   3.0%
-  Y3     $ 14176.5B $  6918.5B  48.8% $  5465.6B $  5890.9B   3.0%
-  Y4     $ 14601.8B $  6483.4B  44.4% $  5121.9B $  5559.9B   3.0%
-  Y5     $ 15039.8B $  6015.9B  40.0% $  4752.6B $  5203.8B   3.0%
+  Y1     Rp 13362.7B Rp  7697.7B  57.6% Rp  6081.2B Rp  6482.1B   3.0%
+  Y2     Rp 13763.6B Rp  7322.8B  53.2% Rp  5785.0B Rp  6197.9B   3.0%
+  Y3     Rp 14176.5B Rp  6918.5B  48.8% Rp  5465.6B Rp  5890.9B   3.0%
+  Y4     Rp 14601.8B Rp  6483.4B  44.4% Rp  5121.9B Rp  5559.9B   3.0%
+  Y5     Rp 15039.8B Rp  6015.9B  40.0% Rp  4752.6B Rp  5203.8B   3.0%
   Assumptions: growth=-0.1%, tax=21%, target_margin=40.0%
 
   DCF INTRINSIC VALUE:
-    BEAR: $278.69 (-45.9%) [WACC=12.0%, g=1.0%]
-    BASE: $397.44 (-22.8%) [WACC=10.0%, g=3.0%]
-    BULL: $605.19 (+17.5%) [WACC=9.0%, g=8.0%]
-    Current Price: $515.0
+    BEAR: Rp278.69 (-45.9%) [WACC=12.0%, g=1.0%]
+    BASE: Rp397.44 (-22.8%) [WACC=10.0%, g=3.0%]
+    BULL: Rp605.19 (+17.5%) [WACC=9.0%, g=8.0%]
+    Current Price: Rp515.0
 
-  SENSITIVITY TABLE (current: $515.0, base FCF/sh: $28.47):
+  SENSITIVITY TABLE (current: Rp515.0, base FCF/sh: Rp28.47):
   WACC       g=1.0%     g=2.0%     g=2.5%     g=3.0%     g=4.0%
   ────── ────────── ────────── ────────── ────────── ──────────
-  8%     $  447.85 $  505.60 $  542.36 $  586.47 $  707.76
-  9%     $  391.30 $  433.05 $  458.75 $  488.72 $  566.66
-  10%    $  347.34 $  378.65 $  397.44 $  418.90 $  472.58
-  11%    $  312.19 $  336.35 $  350.56 $  366.54 $  405.36
-  12%    $  283.44 $  302.51 $  313.55 $  325.81 $  354.95
+  8%     Rp  447.85 Rp  505.60 Rp  542.36 Rp  586.47 Rp  707.76
+  9%     Rp  391.30 Rp  433.05 Rp  458.75 Rp  488.72 Rp  566.66
+  10%    Rp  347.34 Rp  378.65 Rp  397.44 Rp  418.90 Rp  472.58
+  11%    Rp  312.19 Rp  336.35 Rp  350.56 Rp  366.54 Rp  405.36
+  12%    Rp  283.44 Rp  302.51 Rp  313.55 Rp  325.81 Rp  354.95
 
   HISTORICAL CONTEXT (5Y):
     price_percentiles: current=N/A, median=901.71
@@ -207,24 +207,48 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
     [WARNING] If negative FCF for 2 quarters → Review cash position
     [WARNING] If debt_to_equity > 2.0 → Monitor leverage
 
-  DATA GAPS:
-    Recommended: nav_discount, occupancy_rate, rental_yield
+11b. TRADE PLAN (SWING)
+────────────────────────────────────────
+  TREND SNAPSHOT:
+    Price: 515.0
+    MA20/50/200: 545.75 / 556.05 / 563.2163525
+    RSI: 37.3 (Weak)
+    MACD Histogram: -2.1426
+    ATR: 18.57 (Regime: Normal)
+    Support: 513.56, 501.81, 481.57
+    Resistance: 524.29, 560.48, 567.88
+
+  PLAN:
+    Entry zone: 513.56
+    Stop (ATR-based): 485.7
+    Target: 524.29
+    Invalidation: 496.79
+    Risk/Reward (R multiple): 0.39R
+
+  Fib context: 0.382=582.0, 0.5=561.0, 0.618=540.0
 
 12. EVIDENCE APPENDIX
 ────────────────────────────────────────
   Sources (7): Tier A: 0 | Tier B: 3 | Tier C: 4
     [Tier B][market_data] https://finance.yahoo.com/quote/TOWR.JK
+      ↳ Company info: PT Sarana Menara Nusantara Tbk.
     [Tier B][financial_data] https://finance.yahoo.com/quote/TOWR.JK/financials
+      ↳ Factor model: 19 metrics computed
     [Tier B][valuation] https://finance.yahoo.com/quote/TOWR.JK/analysis
+      ↳ Valuation: discount
     [Tier C][database_price_history] db://market_prices/TOWR.JK
+      ↳ price_history: 3925 rows
     [Tier C][database_news_sentiment] db://news_sentiment/TOWR.JK
+      ↳ news_sentiment: 2 rows
     [Tier C][database_financial_facts] db://financial_facts/TOWR.JK
+      ↳ financial_facts: 260 rows
     [Tier C][news_catalysts] db://news_sentiment/TOWR.JK
+      ↳ News catalysts: 2 events
 
   AUDIT TRAIL:
-    Run ID: 3aadcaba-13f9-49e1-a907-70df7dfacb78
-    Sources used: 0
+    Run ID: 46af0052-56e5-4c6f-ade7-aeaa7b142045
+    Sources used: 7
 
-  Generated: 2026-02-21 20:19:13 WIB
+  Generated: 2026-02-21 21:44:55 WIB
   Disclaimer: This memo is auto-generated. Verify all data before investment decisions.
 ════════════════════════════════════════════════════════════

@@ -193,7 +193,13 @@ def check_thesis(
     if no_data > len(kpi_results) / 2:
         status = "insufficient_data"
     else:
-        status = thesis_row.get("status", "on_track")
+        prev_status = thesis_row.get("status", "on_track")
+        # Recover automatically once sufficient KPI data is available,
+        # but keep explicit risk states if they were set externally.
+        if prev_status in {"broken", "at_risk"}:
+            status = prev_status
+        else:
+            status = "on_track"
 
     # Update DB
     try:
@@ -215,13 +221,134 @@ def check_thesis(
 
 
 def _fetch_latest_metrics(ticker: str) -> dict:
-    """Fetch latest metrics from yfinance for thesis checking."""
+    """Fetch latest metrics for thesis checking.
+
+    Priority:
+    1) Computed features from financial_scoring (DB-backed, includes bank metrics)
+    2) Factor model/yfinance metrics as fallback
+    """
+    metrics: dict = {}
+
+    # 1) DB-backed financial features (preferred)
+    try:
+        from .financial_scoring import compute_financial_features
+
+        period = _get_latest_period_hint(ticker)
+        if period:
+            metrics.update({k: v for k, v in compute_financial_features(ticker, period).items() if v is not None})
+    except Exception as e:
+        logger.debug(f"financial_scoring feature fetch failed for thesis check ({ticker}): {e}")
+
+    # 1b) Direct bank_metrics fallback (for Indonesian banks with sparse aliases)
+    try:
+        bank = _fetch_latest_bank_metrics(ticker)
+        if bank:
+            bank_map = {
+                "net_interest_margin": bank.get("nim"),
+                "non_performing_loan": bank.get("npl"),
+                "capital_adequacy_ratio": bank.get("car_kpmm"),
+                "loan_to_deposit_ratio": bank.get("ldr"),
+                "casa_ratio": bank.get("casa"),
+                "cost_to_income": bank.get("bopo"),
+                "cost_of_credit": bank.get("cost_of_credit"),
+            }
+            for key, value in bank_map.items():
+                if value is not None and key not in metrics:
+                    metrics[key] = float(value)
+    except Exception as e:
+        logger.debug(f"bank_metrics fallback failed for thesis check ({ticker}): {e}")
+
+    # 2) yfinance/factor fallback
     try:
         from .factor_model import get_metrics_from_yfinance
-        return get_metrics_from_yfinance(ticker)
+
+        yf_metrics = get_metrics_from_yfinance(ticker)
+        for key, value in yf_metrics.items():
+            if key not in metrics and value is not None:
+                metrics[key] = value
     except Exception as e:
-        logger.warning(f"Could not fetch metrics for thesis check: {e}")
-        return {}
+        logger.warning(f"Could not fetch fallback metrics for thesis check ({ticker}): {e}")
+
+    # Metric aliases to align thesis KPI naming with available metrics
+    if "operating_margin" not in metrics and "op_margin" in metrics:
+        metrics["operating_margin"] = metrics["op_margin"]
+    if "fcf_margin" not in metrics and "fcf" in metrics:
+        # fcf in scoring is binary signal; avoid using as margin proxy unless nothing else exists
+        metrics["fcf_margin"] = metrics["fcf"]
+    if "loan_growth" not in metrics and "revenue_growth" in metrics:
+        # conservative proxy when loan book growth is unavailable
+        metrics["loan_growth"] = metrics["revenue_growth"]
+
+    return metrics
+
+
+def _get_latest_period_hint(ticker: str) -> Optional[str]:
+    """Get latest known reporting period for a ticker from DB."""
+    try:
+        from ..db import get_db_cursor
+
+        with get_db_cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT period FROM bank_metrics
+                WHERE ticker = %(ticker)s
+                ORDER BY period DESC
+                LIMIT 1
+                """,
+                {"ticker": ticker},
+            )
+            row = cursor.fetchone()
+            if row and row.get("period"):
+                return row["period"]
+
+            cursor.execute(
+                """
+                SELECT period FROM fundamentals_quarterly
+                WHERE ticker = %(ticker)s
+                ORDER BY period DESC
+                LIMIT 1
+                """,
+                {"ticker": ticker},
+            )
+            row = cursor.fetchone()
+            if row and row.get("period"):
+                return row["period"]
+
+            cursor.execute(
+                """
+                SELECT period FROM financial_facts
+                WHERE ticker = %(ticker)s
+                ORDER BY period DESC
+                LIMIT 1
+                """,
+                {"ticker": ticker},
+            )
+            row = cursor.fetchone()
+            if row and row.get("period"):
+                return row["period"]
+    except Exception as e:
+        logger.debug(f"Could not determine latest period for thesis check ({ticker}): {e}")
+
+    return None
+
+
+def _fetch_latest_bank_metrics(ticker: str) -> dict:
+    """Fetch latest row from bank_metrics for direct KPI fallback."""
+    from ..db import get_db_cursor
+
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT period, nim, npl, car_kpmm, ldr, casa, bopo, cost_of_credit
+            FROM bank_metrics
+            WHERE ticker = %(ticker)s
+            ORDER BY period DESC
+            LIMIT 1
+            """,
+            {"ticker": ticker},
+        )
+        row = cursor.fetchone()
+        return row or {}
 
 
 def format_thesis_report(result: dict) -> str:

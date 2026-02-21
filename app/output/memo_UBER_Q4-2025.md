@@ -1,10 +1,10 @@
 ════════════════════════════════════════════════════════════
   INVESTMENT MEMO: UBER
   Period: Q4-2025
-  Date: 2026-02-20 03:48 WIB
+  Date: 2026-02-21 21:45 WIB
 ════════════════════════════════════════════════════════════
 
-Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
+Rating: Hold | Confidence: 75% | Integrity: 64/100
 ────────────────────────────────────────────────────────────
 
 1. COMPANY SNAPSHOT
@@ -13,7 +13,7 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
   Sector: Technology — Software - Application
   Country: United States
   Employees: 34,000
-  Market Cap: $151.1B
+  Market Cap: $ 153.5 B
   Website: https://www.uber.com
 
   Uber Technologies, Inc. develops and operates proprietary technology applications in the United States, Canada, Latin America, Europe, the Middle East, Africa, and the Asia Pacific. The company operates through three segments: Mobility, Delivery, and Freight
@@ -31,27 +31,27 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
 
 3. VARIANT VIEW
 ────────────────────────────────────────
-  Current Price: $72.73
+  Current Price: $73.86
 
   BASE CASE (60% probability):
     Revenue growth: 20.1% (continues current trajectory)
     Op margin: 12.3% (stable)
-    Price target: $80.00 (+10%)
+    Price target: $81.25 (+10%)
     Thesis: Quality tech company with sustainable competitive advantages.
 
   BULL CASE (25% probability):
     Revenue growth: 30.1% (accelerates)
     Op margin: 15.3% (+300bp expansion)
-    Price target: $94.55 (+30%)
+    Price target: $96.02 (+30%)
     Thesis: Sustained cloud transition driving double-digit revenue growth with margin expansion.
 
   BEAR CASE (15% probability):
     Revenue growth: 10.1% (decelerates materially)
     Op margin: 7.3% (-500bp compression)
-    Price target: $54.55 (-25%)
+    Price target: $55.39 (-25%)
     Thesis: Cloud growth stalls, legacy business declines faster than expected, margin compression.
 
-  PROBABILITY-WEIGHTED TARGET: $79.82 (+9.8%)
+  PROBABILITY-WEIGHTED TARGET: $81.06 (+9.8%)
 
 4. KEY QUESTIONS
 ────────────────────────────────────────
@@ -75,15 +75,15 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
 
 5. FINANCIAL QUALITY
 ────────────────────────────────────────
-  Composite Score: 47.0/100 (sector: tech)
+  Composite Score: 46.9/100 (sector: tech)
 
   Factor                Score   Coverage
   ──────────────────── ────── ──────────
   Quality               51.9        5/5
   Growth                27.1        3/4
   Balance Sheet         58.3        3/4
-  Cashflow              57.5        4/4
-  Shareholder           56.4        3/4
+  Cashflow              57.4        4/4
+  Shareholder           56.1        3/4
 
   KEY METRICS:
     ▼ Operating Margin: 12.35% (score: 25)
@@ -100,9 +100,9 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
     ─ Fcf Margin: 12.20% (score: 55)
     ─ Cfo To Net Income: 100.46% (score: 42)
     ▲ Capex Intensity: 0.65% (score: 100)
-    ─ Fcf Yield: 4.20% (score: 42)
+    ─ Fcf Yield: 4.14% (score: 41)
     ▼ Payout Ratio: 0.00% (score: 0)
-    ▲ Buyback Yield: 4.32% (score: 90)
+    ▲ Buyback Yield: 4.25% (score: 90)
     ▲ Dilution: -1.34% (score: 84)
 
 6. MOAT & EXECUTION
@@ -128,10 +128,10 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
   Verdict: FAIR
 
   CURRENT MULTIPLES:
-    PE/TRAILING: 15.4x
-    PE/FORWARD: 17.0x
-    PB/RATIO: 5.6x
-    EV/EBITDA: 24.6x
+    PE/TRAILING: 15.6x
+    PE/FORWARD: 17.3x
+    PB/RATIO: 5.7x
+    EV/EBITDA: 25.0x
     EV/REVENUE: 3.0x
     FCF/YIELD: 0.0x
 
@@ -146,12 +146,12 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
   Assumptions: growth=20.1%, tax=21%, target_margin=13.3%
 
   DCF INTRINSIC VALUE:
-    BEAR: $43.35 (-40.4%) [WACC=12.0%, g=10.0%]
-    BASE: $70.28 (-3.4%) [WACC=10.0%, g=15.0%]
-    BULL: $106.37 (+46.2%) [WACC=9.0%, g=20.0%]
-    Current Price: $72.73
+    BEAR: $43.35 (-41.3%) [WACC=12.0%, g=10.0%]
+    BASE: $70.28 (-4.8%) [WACC=10.0%, g=15.0%]
+    BULL: $106.37 (+44.0%) [WACC=9.0%, g=20.0%]
+    Current Price: $73.86
 
-  SENSITIVITY TABLE (current: $72.73, base FCF/sh: $3.08):
+  SENSITIVITY TABLE (current: $73.86, base FCF/sh: $3.08):
   WACC       g=1.0%     g=2.0%     g=2.5%     g=3.0%     g=4.0%
   ────── ────────── ────────── ────────── ────────── ──────────
   8%     $   79.59 $   90.44 $   97.35 $  105.64 $  128.43
@@ -190,10 +190,10 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
 
   KPIs TO MONITOR:
     • Cloud revenue growth (%): — (target: > 20%)
-    • Operating margin expansion: — (target: expanding QoQ)
-    • Free cash flow margin: — (target: > 15%)
+    • Operating margin expansion: 12.35% (target: expanding QoQ)
+    • Free cash flow margin: 12.20% (target: > 15%)
     • R&D as % of revenue: — (target: 10-20%)
-    • Revenue growth (YoY): — (target: > 8%)
+    • Revenue growth (YoY): 20.10% (target: > 8%)
 
   WHAT WOULD CHANGE OUR MIND:
     [CRITICAL] If revenue_growth < 0 for 2 consecutive quarters → Downgrade to SELL
@@ -204,14 +204,48 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
   DATA GAPS:
     Recommended: revenue_qoq, share_count
 
+11b. TRADE PLAN (SWING)
+────────────────────────────────────────
+  TREND SNAPSHOT:
+    Price: 73.86
+    MA20/50/200: 75.97 / 80.34 / 88.8206
+    RSI: 40.6 (Weak)
+    MACD Histogram: 0.0028
+    ATR: 2.87 (Regime: Normal)
+    Support: 69.36, 60.63
+    Resistance: 77.58, 88.31, 93.33
+
+  PLAN:
+    Entry zone: 69.36
+    Stop (ATR-based): 65.06
+    Target: 77.58
+    Invalidation: 60.02
+    Risk/Reward (R multiple): 1.91R
+
+  Fib context: 0.382=83.7, 0.5=80.9, 0.618=78.1
+
 12. EVIDENCE APPENDIX
 ────────────────────────────────────────
-  No evidence items collected.
+  Sources (7): Tier A: 0 | Tier B: 3 | Tier C: 4
+    [Tier B][market_data] https://finance.yahoo.com/quote/UBER
+      ↳ Company info: Uber Technologies, Inc.
+    [Tier B][financial_data] https://finance.yahoo.com/quote/UBER/financials
+      ↳ Factor model: 18 metrics computed
+    [Tier B][valuation] https://finance.yahoo.com/quote/UBER/analysis
+      ↳ Valuation: fair
+    [Tier C][database_price_history] db://market_prices/UBER
+      ↳ price_history: 1705 rows
+    [Tier C][database_news_sentiment] db://news_sentiment/UBER
+      ↳ news_sentiment: 46 rows
+    [Tier C][database_financial_facts] db://financial_facts/UBER
+      ↳ financial_facts: 126 rows
+    [Tier C][news_catalysts] db://news_sentiment/UBER
+      ↳ News catalysts: 1 events
 
   AUDIT TRAIL:
-    Run ID: ccccec56-822d-4122-8d0e-09bf1e868d86
-    Sources used: 0
+    Run ID: 2bfce2b7-4d51-49e3-9b9b-3ad1707ce2b5
+    Sources used: 7
 
-  Generated: 2026-02-20 03:48:36 WIB
+  Generated: 2026-02-21 21:45:28 WIB
   Disclaimer: This memo is auto-generated. Verify all data before investment decisions.
 ════════════════════════════════════════════════════════════

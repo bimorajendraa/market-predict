@@ -143,6 +143,87 @@ SECTOR_KEY_QUESTIONS: dict[str, list[dict]] = {
             "trigger": "If > 30% revenue from single-risk geography, monitor closely.",
         },
     ],
+    "tower_infra": [
+        {
+            "question": "Is tenancy ratio (tenants per tower) growing?",
+            "metric": "tenancy_ratio",
+            "trigger": "If tenancy ratio declines 2+ consecutive quarters, utilization risk.",
+        },
+        {
+            "question": "Are average lease terms long enough for revenue visibility?",
+            "metric": "avg_lease_term",
+            "trigger": "If avg lease term < 8 years or shortening, revenue at risk.",
+        },
+        {
+            "question": "Is net debt / EBITDA manageable given capex requirements?",
+            "metric": "net_debt_to_ebitda",
+            "trigger": "If net debt/EBITDA > 5x and rising, leverage risk.",
+        },
+        {
+            "question": "Are escalator clauses keeping pace with inflation?",
+            "metric": "escalator_rate",
+            "trigger": "If escalator rate < CPI, real revenue erosion.",
+        },
+        {
+            "question": "Is interest coverage sufficient for debt servicing?",
+            "metric": "interest_coverage",
+            "trigger": "If interest coverage < 2x, debt servicing risk.",
+        },
+    ],
+    "streaming": [
+        {
+            "question": "Are subscriber net adds accelerating or decelerating?",
+            "metric": "subscriber_growth",
+            "trigger": "If net adds negative for 2+ quarters, market saturation.",
+        },
+        {
+            "question": "Is ARPU trending up (price hikes sticking) or down (mix shift)?",
+            "metric": "arpu",
+            "trigger": "If ARPU declining > 3% YoY while subs stagnate, pricing power lost.",
+        },
+        {
+            "question": "Is churn rate stable or increasing?",
+            "metric": "churn_rate",
+            "trigger": "If churn > 5% monthly or rising 2+ consecutive quarters, retention problem.",
+        },
+        {
+            "question": "Is content spend growing faster than revenue?",
+            "metric": "content_spend_ratio",
+            "trigger": "If content spend / revenue > 60% and rising, margin compression.",
+        },
+        {
+            "question": "Is ad-tier revenue contributing meaningfully?",
+            "metric": "ad_revenue_share",
+            "trigger": "If ad-tier < 5% of revenue after 4+ quarters, monetization failure.",
+        },
+    ],
+    "infrastructure": [
+        {
+            "question": "Is asset utilization near capacity or underutilized?",
+            "metric": "utilization_rate",
+            "trigger": "If utilization < 60%, overcapacity; if > 95%, bottleneck risk.",
+        },
+        {
+            "question": "Is the capex cycle peaking or troughing?",
+            "metric": "capex_intensity",
+            "trigger": "If capex/revenue > 30% for 3+ years, watch for return dilution.",
+        },
+        {
+            "question": "Are regulatory tariffs/tolls being maintained or cut?",
+            "metric": "tariff_stability",
+            "trigger": "If regulator mandates tariff cut > 10%, revenue at risk.",
+        },
+        {
+            "question": "Is the contract/concession renewal pipeline secure?",
+            "metric": "contract_expiry",
+            "trigger": "If > 20% of revenue from contracts expiring within 2 years, flag.",
+        },
+        {
+            "question": "Is debt maturity profile manageable (no near-term wall)?",
+            "metric": "debt_maturity_profile",
+            "trigger": "If > 30% of debt matures within 12 months and refinancing difficult, critical.",
+        },
+    ],
     "general": [
         {
             "question": "Is revenue growth sustainable or one-time driven?",

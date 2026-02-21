@@ -1,0 +1,50 @@
+[
+  {
+    "memo": "memo_BBCA.JK_Q4-2025.md",
+    "integrity_na": false,
+    "trade_plan": true,
+    "blank_kpis": 1,
+    "coverage_failed": true,
+    "thesis_insufficient": false
+  },
+  {
+    "memo": "memo_BMRI.JK_Q4-2025.md",
+    "integrity_na": false,
+    "trade_plan": true,
+    "blank_kpis": 1,
+    "coverage_failed": true,
+    "thesis_insufficient": false
+  },
+  {
+    "memo": "memo_NFLX_Q4-2025.md",
+    "integrity_na": false,
+    "trade_plan": true,
+    "blank_kpis": 2,
+    "coverage_failed": false,
+    "thesis_insufficient": false
+  },
+  {
+    "memo": "memo_ORCL_Q4-2025.md",
+    "integrity_na": false,
+    "trade_plan": true,
+    "blank_kpis": 2,
+    "coverage_failed": false,
+    "thesis_insufficient": false
+  },
+  {
+    "memo": "memo_TOWR.JK_Q4-2025.md",
+    "integrity_na": false,
+    "trade_plan": true,
+    "blank_kpis": 0,
+    "coverage_failed": false,
+    "thesis_insufficient": false
+  },
+  {
+    "memo": "memo_UBER_Q4-2025.md",
+    "integrity_na": false,
+    "trade_plan": true,
+    "blank_kpis": 2,
+    "coverage_failed": false,
+    "thesis_insufficient": false
+  }
+]

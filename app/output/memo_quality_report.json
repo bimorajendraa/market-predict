@@ -1,0 +1,65 @@
+{
+  "memo_count": 5,
+  "files": [
+    {
+      "file": "memo_BMRI.JK_Q4-2025.md",
+      "missing_sections": [
+        "11b. TRADE PLAN (SWING)"
+      ],
+      "na_count": 2,
+      "insufficient_mentions": 1,
+      "data_gap_markers": 2,
+      "has_trade_plan": false,
+      "odd_currency": true,
+      "integrity_na": true
+    },
+    {
+      "file": "memo_NFLX_Q4-2025.md",
+      "missing_sections": [
+        "11b. TRADE PLAN (SWING)"
+      ],
+      "na_count": 2,
+      "insufficient_mentions": 0,
+      "data_gap_markers": 1,
+      "has_trade_plan": false,
+      "odd_currency": false,
+      "integrity_na": true
+    },
+    {
+      "file": "memo_ORCL_Q4-2025.md",
+      "missing_sections": [
+        "11b. TRADE PLAN (SWING)"
+      ],
+      "na_count": 2,
+      "insufficient_mentions": 0,
+      "data_gap_markers": 1,
+      "has_trade_plan": false,
+      "odd_currency": false,
+      "integrity_na": true
+    },
+    {
+      "file": "memo_TOWR.JK_Q4-2025.md",
+      "missing_sections": [
+        "11b. TRADE PLAN (SWING)"
+      ],
+      "na_count": 1,
+      "insufficient_mentions": 0,
+      "data_gap_markers": 0,
+      "has_trade_plan": false,
+      "odd_currency": false,
+      "integrity_na": false
+    },
+    {
+      "file": "memo_UBER_Q4-2025.md",
+      "missing_sections": [
+        "11b. TRADE PLAN (SWING)"
+      ],
+      "na_count": 2,
+      "insufficient_mentions": 0,
+      "data_gap_markers": 1,
+      "has_trade_plan": false,
+      "odd_currency": false,
+      "integrity_na": true
+    }
+  ]
+}

@@ -350,27 +350,60 @@ def compute_financial_features(ticker: str, period: str) -> dict[str, Optional[f
     else:
         features["eps_growth"] = None
 
-    # ── Bank Metrics: NIM, NPL, CAR ──
-    nim = current.get("net_interest_margin") or current.get("nim")
-    if nim is not None:
-        # NIM is often stored as a percentage (e.g., 5.2 for 5.2%), normalize to decimal
-        features["net_interest_margin"] = nim if nim < 1 else nim / 100.0
-    else:
-        features["net_interest_margin"] = None
+    # ── Bank Metrics: prefer dedicated bank_metrics table ──
+    bank_metrics = _get_latest_bank_metrics_row(ticker, period)
 
-    npl = current.get("non_performing_loan") or current.get("npl")
-    if npl is not None:
-        features["non_performing_loan"] = npl if npl < 1 else npl / 100.0
-    else:
-        features["non_performing_loan"] = None
+    nim = (
+        bank_metrics.get("nim")
+        if bank_metrics
+        else (current.get("net_interest_margin") or current.get("nim"))
+    )
+    features["net_interest_margin"] = nim if nim is None or nim < 1 else nim / 100.0
 
-    car = current.get("capital_adequacy_ratio") or current.get("car")
-    if car is not None:
-        features["capital_adequacy_ratio"] = car if car < 1 else car / 100.0
-    else:
-        features["capital_adequacy_ratio"] = None
+    npl = (
+        bank_metrics.get("npl")
+        if bank_metrics
+        else (current.get("non_performing_loan") or current.get("npl"))
+    )
+    features["non_performing_loan"] = npl if npl is None or npl < 1 else npl / 100.0
+
+    car = (
+        bank_metrics.get("car_kpmm")
+        if bank_metrics
+        else (current.get("capital_adequacy_ratio") or current.get("car"))
+    )
+    features["capital_adequacy_ratio"] = car if car is None or car < 1 else car / 100.0
+
+    ldr = bank_metrics.get("ldr") if bank_metrics else current.get("loan_to_deposit_ratio")
+    features["loan_to_deposit_ratio"] = ldr if ldr is None or ldr < 1 else ldr / 100.0
+
+    casa = bank_metrics.get("casa") if bank_metrics else current.get("casa_ratio")
+    features["casa_ratio"] = casa if casa is None or casa < 1 else casa / 100.0
+
+    bopo = bank_metrics.get("bopo") if bank_metrics else current.get("cost_to_income")
+    features["cost_to_income"] = bopo if bopo is None or bopo < 1 else bopo / 100.0
+
+    coc = bank_metrics.get("cost_of_credit") if bank_metrics else current.get("cost_of_credit")
+    features["cost_of_credit"] = coc if coc is None or coc < 1 else coc / 100.0
 
     return features
+
+
+def _get_latest_bank_metrics_row(ticker: str, period: str) -> dict:
+    """Fetch latest bank_metrics for a ticker, prioritizing requested period."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT *
+            FROM bank_metrics
+            WHERE ticker = %(ticker)s
+            ORDER BY (period = %(period)s) DESC, period DESC
+            LIMIT 1
+            """,
+            {"ticker": ticker, "period": period},
+        )
+        row = cursor.fetchone()
+        return row or {}
 
 
 def compute_score(

@@ -144,6 +144,22 @@ def run_memo_generation(
     # Inject into summary so _build_section_evidence picks them up
     summary["evidence_items"] = evidence_items
 
+    # ── Compute integrity score (replaces N/A) ──
+    integrity = _compute_integrity_score(
+        evidence_items, coverage_data, ticker
+    )
+    summary["integrity_flag"] = f"{integrity['score']}/100"
+    summary["integrity_detail"] = integrity
+
+    # ── Fix audit sources count ──
+    if not audit_data:
+        audit_data = {}
+    audit_data["sources_count"] = len(evidence_items)
+
+    # ── Detect currency ──
+    from ..analysis.currency_utils import detect_currency
+    currency = detect_currency(ticker)
+
     # Gather style/positioning data
     positioning_data = _compute_positioning(
         ticker, factor_data, thesis_data, sector_data, coverage_data
@@ -152,12 +168,12 @@ def run_memo_generation(
     # ── Build 12 memo sections ──
     memo_lines = []
 
-    # Header
-    memo_lines.extend(_build_header(ticker, period, now_wib, summary))
+    # Header (with staleness detection)
+    memo_lines.extend(_build_header(ticker, period, now_wib, summary, currency))
     memo_lines.append("")
 
-    # Section 1: Company Snapshot
-    memo_lines.extend(_build_section_snapshot(company_info, ticker))
+    # Section 1: Company Snapshot (currency-aware)
+    memo_lines.extend(_build_section_snapshot(company_info, ticker, currency))
     memo_lines.append("")
 
     # Section 2: Investment Thesis
@@ -222,6 +238,10 @@ def run_memo_generation(
     memo_lines.extend(_build_section_tracking(thesis_data, coverage_data))
     memo_lines.append("")
 
+    # Section 11b: Trade Plan (Swing)
+    memo_lines.extend(_build_section_trade_plan(ticker, technical_levels or pr.get("technical", {})))
+    memo_lines.append("")
+
     # Section 12: Evidence Appendix
     memo_lines.extend(_build_section_evidence(summary, audit_data, now_wib))
 
@@ -254,11 +274,91 @@ def run_memo_generation(
 
 
 # ============================================
+# Integrity Scoring
+# ============================================
+
+
+def _compute_integrity_score(
+    evidence_items: list,
+    coverage_data: dict,
+    ticker: str,
+) -> dict:
+    """
+    Compute 0-100 integrity score based on data quality signals.
+
+    Components:
+      - Coverage ratio (40%): from coverage contract
+      - Data freshness (30%): market_prices recency
+      - Source count (20%): evidence items available
+      - Tier A sources (10%): bonus for filings/IR docs
+    """
+    score_parts = {}
+
+    # 1. Coverage (40%)
+    coverage_pct = coverage_data.get("coverage_pct", 0)
+    score_parts["coverage"] = coverage_pct * 40
+    missing_required = coverage_data.get("missing_required", [])
+
+    # 2. Data freshness (30%) — check last price date
+    stale = False
+    days_since = 0
+    try:
+        from ..db import get_db_cursor
+        with get_db_cursor() as cur:
+            cur.execute(
+                "SELECT MAX(date) as last_date FROM market_prices "
+                "WHERE ticker = %(t)s",
+                {"t": ticker},
+            )
+            row = cur.fetchone()
+            if row and row.get("last_date"):
+                from datetime import date
+                last_date = row["last_date"]
+                if isinstance(last_date, str):
+                    last_date = date.fromisoformat(last_date)
+                elif hasattr(last_date, "date"):
+                    last_date = last_date.date()
+                days_since = (date.today() - last_date).days
+                stale = days_since > 5  # >5 calendar days ≈ 3+ trading days
+                freshness = max(0, 1.0 - (days_since / 30))
+            else:
+                freshness = 0
+                stale = True
+                days_since = 999
+    except Exception:
+        freshness = 0.5  # unknown — partial credit
+
+    score_parts["freshness"] = freshness * 30
+
+    # 3. Source count (20%) — aim for at least 8 sources
+    source_count = len(evidence_items)
+    score_parts["sources"] = min(source_count / 8, 1.0) * 20
+
+    # 4. Tier A bonus (10%)
+    tier_a_count = sum(
+        1 for ev in evidence_items
+        if ev.get("tier") == "A" or "filing" in ev.get("type", "").lower()
+    )
+    score_parts["tier_a"] = min(tier_a_count / 2, 1.0) * 10
+
+    total = max(0, min(100, round(sum(score_parts.values()))))
+
+    return {
+        "score": total,
+        "components": {k: round(v, 1) for k, v in score_parts.items()},
+        "stale": stale,
+        "days_since_last_price": days_since,
+        "missing_required": missing_required,
+        "source_count": source_count,
+    }
+
+
+# ============================================
 # Section Builders
 # ============================================
 
 def _build_header(ticker: str, period: str, now_wib: datetime,
-                  summary: dict) -> list[str]:
+                  summary: dict, currency: str = "USD") -> list[str]:
     L = [
         "═" * 60,
         f"  INVESTMENT MEMO: {ticker}",
@@ -271,10 +371,23 @@ def _build_header(ticker: str, period: str, now_wib: datetime,
         f"Integrity: {summary.get('integrity_flag', 'N/A')}",
         "─" * 60,
     ]
+
+    # Data staleness warning
+    integrity_detail = summary.get("integrity_detail", {})
+    if integrity_detail.get("stale"):
+        days_old = integrity_detail.get("days_since_last_price", "?")
+        L.append(f"  ⚠ DATA STALE: last price is {days_old} trading days old")
+
+    # Integrity breakdown (compact)
+    if integrity_detail.get("missing_required"):
+        L.append(f"  ⚠ Missing: {', '.join(integrity_detail['missing_required'])}")
+
     return L
 
 
-def _build_section_snapshot(info: dict, ticker: str) -> list[str]:
+def _build_section_snapshot(info: dict, ticker: str, currency: str = "USD") -> list[str]:
+    from ..analysis.currency_utils import format_financial
+
     L = [
         "1. COMPANY SNAPSHOT",
         "─" * 40,
@@ -295,12 +408,7 @@ def _build_section_snapshot(info: dict, ticker: str) -> list[str]:
     if employees:
         L.append(f"  Employees: {employees:,}")
     if market_cap:
-        if market_cap >= 1e12:
-            L.append(f"  Market Cap: ${market_cap/1e12:.1f}T")
-        elif market_cap >= 1e9:
-            L.append(f"  Market Cap: ${market_cap/1e9:.1f}B")
-        else:
-            L.append(f"  Market Cap: ${market_cap/1e6:.0f}M")
+        L.append(f"  Market Cap: {format_financial(market_cap, currency)}")
     if website:
         L.append(f"  Website: {website}")
 
@@ -506,11 +614,16 @@ def _build_section_valuation(val_data: dict, ticker: str) -> list[str]:
                 L.append(f"    {label}: {value}")
 
     # 3-Statement Mini Model
+    from ..analysis.currency_utils import detect_currency, format_financial
+    ccy = detect_currency(ticker)
+    ccy_sym = "Rp" if ccy == "IDR" else "$"
+
     model = val_data.get("mini_3statement", {})
     if model.get("status") == "success":
         L.append("")
         cur = model.get("current", {})
-        L.append(f"  3-STATEMENT MODEL (current: Rev ${cur.get('revenue_b', '?')}B, "
+        rev_b = cur.get('revenue_b', '?')
+        L.append(f"  3-STATEMENT MODEL (current: Rev {ccy_sym}{rev_b}B, "
                  f"OpM {cur.get('op_margin_pct', '?')}%, "
                  f"NetM {cur.get('net_margin_pct', '?')}%):")
         sep = chr(9472)
@@ -519,9 +632,9 @@ def _build_section_valuation(val_data: dict, ticker: str) -> list[str]:
         L.append(f"  {sep*6} {sep*10} {sep*10} {sep*6} "
                  f"{sep*10} {sep*10} {sep*7}")
         for p in model.get("projections", []):
-            L.append(f"  Y{p['year']:<5} ${p['revenue']:>8.1f}B ${p['op_income']:>8.1f}B "
-                     f"{p['op_margin']:>5.1f}% ${p['net_income']:>8.1f}B "
-                     f"${p['fcf']:>8.1f}B {p['growth_rate']:>5.1f}%")
+            L.append(f"  Y{p['year']:<5} {ccy_sym}{p['revenue']:>8.1f}B {ccy_sym}{p['op_income']:>8.1f}B "
+                     f"{p['op_margin']:>5.1f}% {ccy_sym}{p['net_income']:>8.1f}B "
+                     f"{ccy_sym}{p['fcf']:>8.1f}B {p['growth_rate']:>5.1f}%")
         assumptions = model.get("assumptions", {})
         L.append(f"  Assumptions: growth={assumptions.get('base_growth', '?')}, "
                  f"tax={assumptions.get('tax_rate', '?')}, "
@@ -539,24 +652,24 @@ def _build_section_valuation(val_data: dict, ticker: str) -> list[str]:
                 upside = dcf.get(f"{scenario}_upside")
                 assumptions = dcf.get(f"{scenario}_assumptions", {})
                 if val:
-                    L.append(f"    {scenario.upper()}: ${val:.2f} ({upside:+.1f}%) "
+                    L.append(f"    {scenario.upper()}: {ccy_sym}{val:.2f} ({upside:+.1f}%) "
                              f"[WACC={assumptions.get('wacc', '?')}, "
                              f"g={assumptions.get('growth', '?')}]")
             cp = dcf.get("current_price")
             if cp:
-                L.append(f"    Current Price: ${cp}")
+                L.append(f"    Current Price: {ccy_sym}{cp}")
         elif dcf_status == "negative_fcf":
             L.append(f"  DCF: {dcf.get('message', 'Negative FCF')}")
             cp = dcf.get("current_price")
             if cp:
-                L.append(f"    Current Price: ${cp}, FCF/share: ${dcf.get('fcf_per_share', '?')}")
+                L.append(f"    Current Price: {ccy_sym}{cp}, FCF/share: {ccy_sym}{dcf.get('fcf_per_share', '?')}")
 
     # Sensitivity Table
     sens = val_data.get("sensitivity_table", {})
     if sens.get("status") == "success":
         L.append("")
-        L.append(f"  SENSITIVITY TABLE (current: ${sens.get('current_price', '?')}, "
-                 f"base FCF/sh: ${sens.get('base_fcf_ps', '?')}):")
+        L.append(f"  SENSITIVITY TABLE (current: {ccy_sym}{sens.get('current_price', '?')}, "
+                 f"base FCF/sh: {ccy_sym}{sens.get('base_fcf_ps', '?')}):")
         tg_labels = sens.get("tg_range", [])
         sep = chr(9472)
         L.append(f"  {'WACC':<6} " + " ".join(f"{'g=' + tg:>10}" for tg in tg_labels))
@@ -566,7 +679,7 @@ def _build_section_valuation(val_data: dict, ticker: str) -> list[str]:
             for tg in tg_labels:
                 key = f"tg_{tg}"
                 v = row.get(key, "?")
-                vals.append(f"${v:>8.2f}" if isinstance(v, (int, float)) else f"{v:>9}")
+                vals.append(f"{ccy_sym}{v:>8.2f}" if isinstance(v, (int, float)) else f"{v:>9}")
             L.append(f"  {row.get('wacc', '?'):<6} " + " ".join(vals))
 
     # Historical percentile
@@ -668,6 +781,12 @@ def _build_section_evidence(summary: dict, audit_data: dict,
             url = ev.get("source_url", "N/A")
             tier = ev.get("tier", "?")
             L.append(f"    [Tier {tier}][{src_type}] {url}")
+            snippet = ev.get("snippet") or ev.get("description")
+            if snippet:
+                short_snippet = str(snippet).strip().replace("\n", " ")
+                if len(short_snippet) > 140:
+                    short_snippet = short_snippet[:140] + "..."
+                L.append(f"      ↳ {short_snippet}")
     else:
         L.append("  No evidence items collected.")
 
@@ -687,6 +806,105 @@ def _build_section_evidence(summary: dict, audit_data: dict,
     L.append(f"  Generated: {now.strftime('%Y-%m-%d %H:%M:%S WIB')}")
     L.append("  Disclaimer: This memo is auto-generated. Verify all data before investment decisions.")
     L.append("═" * 60)
+
+    return L
+
+
+def _build_section_trade_plan(ticker: str, technical: dict) -> list[str]:
+    """Swing trading plan based on current technical indicators."""
+    L = [
+        "11b. TRADE PLAN (SWING)",
+        "─" * 40,
+    ]
+
+    if not technical or technical.get("status") != "ok":
+        L.append("  Technical data insufficient for trade plan.")
+        return L
+
+    price = technical.get("current_price")
+    trend = technical.get("trend", {})
+    rsi = technical.get("rsi", {})
+    vol = technical.get("volatility", {})
+    fib = technical.get("fibonacci", {})
+    support = technical.get("support", [])
+    resistance = technical.get("resistance", [])
+
+    # Approx MACD histogram from model-ready features if available
+    macd_hist = None
+    try:
+        from ..analysis.model_trainer import fetch_training_data, engineer_features
+
+        df = engineer_features(fetch_training_data(ticker))
+        if not df.empty and "MACDh_12_26_9" in df.columns:
+            macd_hist = float(df["MACDh_12_26_9"].iloc[-1])
+    except Exception:
+        macd_hist = None
+
+    atr = vol.get("atr")
+    ma20 = trend.get("ma20")
+    ma50 = trend.get("ma50")
+    ma200 = None
+    try:
+        from ..analysis.model_trainer import fetch_training_data, engineer_features
+
+        df2 = engineer_features(fetch_training_data(ticker))
+        if not df2.empty and "SMA_200" in df2.columns:
+            ma200 = float(df2["SMA_200"].iloc[-1])
+    except Exception:
+        ma200 = None
+
+    L.append("  TREND SNAPSHOT:")
+    L.append(f"    Price: {price}")
+    L.append(f"    MA20/50/200: {ma20 or 'N/A'} / {ma50 or 'N/A'} / {ma200 or 'N/A'}")
+    L.append(f"    RSI: {rsi.get('rsi', 'N/A')} ({rsi.get('rsi_zone', 'N/A')})")
+    L.append(f"    MACD Histogram: {round(macd_hist, 4) if macd_hist is not None else 'N/A'}")
+    L.append(f"    ATR: {atr or 'N/A'} (Regime: {vol.get('volatility_regime', 'N/A')})")
+
+    if support:
+        L.append(f"    Support: {', '.join(str(s) for s in support)}")
+    if resistance:
+        L.append(f"    Resistance: {', '.join(str(r) for r in resistance)}")
+
+    # Build plan
+    entry = support[0] if support else price
+    stop = None
+    if entry is not None and atr is not None:
+        stop = round(float(entry) - 1.5 * float(atr), 2)
+    elif support and len(support) > 1:
+        stop = support[1]
+
+    target = None
+    if resistance:
+        target = resistance[0]
+    elif entry is not None and atr is not None:
+        target = round(float(entry) + 2.5 * float(atr), 2)
+
+    invalidation = None
+    if support and len(support) > 1:
+        invalidation = round(float(support[1]) * 0.99, 2)
+    elif stop is not None:
+        invalidation = stop
+
+    rr = None
+    if entry and stop and target and (entry - stop) > 0:
+        rr = round((target - entry) / (entry - stop), 2)
+
+    L.append("")
+    L.append("  PLAN:")
+    L.append(f"    Entry zone: {entry if entry is not None else 'N/A'}")
+    L.append(f"    Stop (ATR-based): {stop if stop is not None else 'N/A'}")
+    L.append(f"    Target: {target if target is not None else 'N/A'}")
+    L.append(f"    Invalidation: {invalidation if invalidation is not None else 'N/A'}")
+    if rr is not None:
+        L.append(f"    Risk/Reward (R multiple): {rr}R")
+
+    # Add fib context if available
+    if fib:
+        L.append("")
+        L.append(
+            f"  Fib context: 0.382={fib.get('fib_382', 'N/A')}, "
+            f"0.5={fib.get('fib_500', 'N/A')}, 0.618={fib.get('fib_618', 'N/A')}"
+        )
 
     return L
 
@@ -1106,9 +1324,41 @@ def _get_news_catalysts(ticker: str) -> dict:
     except Exception:
         pass
 
+    # Add short qualitative evidence snippets from DB sentiment/news
+    snippets: list[dict] = []
+    try:
+        from ..db import get_db_cursor
+
+        with get_db_cursor() as cur:
+            cur.execute(
+                """
+                SELECT headline, sentiment, impact, date
+                FROM news_sentiment
+                WHERE ticker = %(t)s
+                ORDER BY ABS(impact) DESC, date DESC
+                LIMIT 8
+                """,
+                {"t": ticker},
+            )
+            rows = cur.fetchall()
+
+        for row in rows:
+            hl = row.get("headline") or ""
+            snippets.append(
+                {
+                    "headline": hl,
+                    "snippet": hl[:180],
+                    "why": f"Sentiment {row.get('sentiment', 'N/A')} impact {row.get('impact', 0)}",
+                    "date": str(row.get("date", "")),
+                }
+            )
+    except Exception:
+        snippets = []
+
     return {
         "top_catalysts": catalysts,
         "changes_since_last": [],
+        "evidence_snippets": snippets,
     }
 
 

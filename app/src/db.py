@@ -721,3 +721,246 @@ def get_pipeline_runs_for_ticker(
         )
         return cursor.fetchall()
 
+
+# ============================================
+# IDX / Indonesia Fundamentals
+# ============================================
+
+def insert_idx_filing(
+    ticker: str,
+    filing_type: str,
+    url: str,
+    filing_date: Optional[str] = None,
+    period: Optional[str] = None,
+    source: str = "idx_ir",
+    doc_kind: Optional[str] = None,
+    title: Optional[str] = None,
+    checksum: Optional[str] = None,
+) -> Optional[UUID]:
+    """Insert IDX/IR filing metadata with dedup by ticker+url."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO idx_filings
+                (ticker, source, filing_type, filing_date, period, url, checksum, doc_kind, title)
+            VALUES
+                (%(ticker)s, %(source)s, %(filing_type)s, %(filing_date)s, %(period)s,
+                 %(url)s, %(checksum)s, %(doc_kind)s, %(title)s)
+            ON CONFLICT (ticker, url) DO NOTHING
+            RETURNING id
+            """,
+            {
+                "ticker": ticker,
+                "source": source,
+                "filing_type": filing_type,
+                "filing_date": filing_date,
+                "period": period,
+                "url": url,
+                "checksum": checksum,
+                "doc_kind": doc_kind,
+                "title": title,
+            },
+        )
+        row = cursor.fetchone()
+        return row["id"] if row else None
+
+
+def upsert_fundamentals_quarterly(
+    ticker: str,
+    period: str,
+    values: dict[str, Any],
+) -> None:
+    """Upsert structured fundamentals quarterly record."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO fundamentals_quarterly
+                (ticker, period, statement_date, currency, unit, scale,
+                 revenue, operating_income, net_income, eps,
+                 total_assets, total_equity, total_debt, shares_outstanding,
+                 source_url)
+            VALUES
+                (%(ticker)s, %(period)s, %(statement_date)s, %(currency)s, %(unit)s, %(scale)s,
+                 %(revenue)s, %(operating_income)s, %(net_income)s, %(eps)s,
+                 %(total_assets)s, %(total_equity)s, %(total_debt)s, %(shares_outstanding)s,
+                 %(source_url)s)
+            ON CONFLICT (ticker, period)
+            DO UPDATE SET
+                statement_date = EXCLUDED.statement_date,
+                currency = EXCLUDED.currency,
+                unit = EXCLUDED.unit,
+                scale = EXCLUDED.scale,
+                revenue = EXCLUDED.revenue,
+                operating_income = EXCLUDED.operating_income,
+                net_income = EXCLUDED.net_income,
+                eps = EXCLUDED.eps,
+                total_assets = EXCLUDED.total_assets,
+                total_equity = EXCLUDED.total_equity,
+                total_debt = EXCLUDED.total_debt,
+                shares_outstanding = EXCLUDED.shares_outstanding,
+                source_url = EXCLUDED.source_url,
+                updated_at = NOW()
+            """,
+            {
+                "ticker": ticker,
+                "period": period,
+                "statement_date": values.get("statement_date"),
+                "currency": values.get("currency", "IDR"),
+                "unit": values.get("unit", "raw"),
+                "scale": values.get("scale", "1"),
+                "revenue": values.get("revenue"),
+                "operating_income": values.get("operating_income"),
+                "net_income": values.get("net_income"),
+                "eps": values.get("eps"),
+                "total_assets": values.get("total_assets"),
+                "total_equity": values.get("total_equity"),
+                "total_debt": values.get("total_debt"),
+                "shares_outstanding": values.get("shares_outstanding"),
+                "source_url": values.get("source_url"),
+            },
+        )
+
+
+def upsert_bank_metrics(
+    ticker: str,
+    period: str,
+    values: dict[str, Any],
+) -> None:
+    """Upsert bank KPI record for Indonesian banks."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO bank_metrics
+                (ticker, period, statement_date, currency, unit, scale,
+                 nim, npl, car_kpmm, ldr, casa, bopo, cost_of_credit, source_url)
+            VALUES
+                (%(ticker)s, %(period)s, %(statement_date)s, %(currency)s, %(unit)s, %(scale)s,
+                 %(nim)s, %(npl)s, %(car_kpmm)s, %(ldr)s, %(casa)s, %(bopo)s, %(cost_of_credit)s,
+                 %(source_url)s)
+            ON CONFLICT (ticker, period)
+            DO UPDATE SET
+                statement_date = EXCLUDED.statement_date,
+                currency = EXCLUDED.currency,
+                unit = EXCLUDED.unit,
+                scale = EXCLUDED.scale,
+                nim = EXCLUDED.nim,
+                npl = EXCLUDED.npl,
+                car_kpmm = EXCLUDED.car_kpmm,
+                ldr = EXCLUDED.ldr,
+                casa = EXCLUDED.casa,
+                bopo = EXCLUDED.bopo,
+                cost_of_credit = EXCLUDED.cost_of_credit,
+                source_url = EXCLUDED.source_url,
+                updated_at = NOW()
+            """,
+            {
+                "ticker": ticker,
+                "period": period,
+                "statement_date": values.get("statement_date"),
+                "currency": values.get("currency", "IDR"),
+                "unit": values.get("unit", "ratio"),
+                "scale": values.get("scale", "1"),
+                "nim": values.get("nim"),
+                "npl": values.get("npl"),
+                "car_kpmm": values.get("car_kpmm"),
+                "ldr": values.get("ldr"),
+                "casa": values.get("casa"),
+                "bopo": values.get("bopo"),
+                "cost_of_credit": values.get("cost_of_credit"),
+                "source_url": values.get("source_url"),
+            },
+        )
+
+
+def insert_corporate_action(
+    ticker: str,
+    action_date: Any,
+    action_type: str,
+    amount: Optional[float] = None,
+    currency: Optional[str] = None,
+    ratio: Optional[str] = None,
+    shares_outstanding: Optional[float] = None,
+    payout_date: Optional[Any] = None,
+    source_url: Optional[str] = None,
+    metadata_json: Optional[dict[str, Any]] = None,
+) -> Optional[UUID]:
+    """Insert corporate action with dedup and metadata."""
+    import json as _json
+
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO corporate_actions
+                (ticker, action_date, action_type, amount, currency, ratio,
+                 shares_outstanding, payout_date, source_url, metadata_json)
+            VALUES
+                (%(ticker)s, %(action_date)s, %(action_type)s, %(amount)s, %(currency)s,
+                 %(ratio)s, %(shares_outstanding)s, %(payout_date)s, %(source_url)s,
+                 %(metadata_json)s)
+            ON CONFLICT (ticker, action_date, action_type, ratio) DO NOTHING
+            RETURNING id
+            """,
+            {
+                "ticker": ticker,
+                "action_date": action_date,
+                "action_type": action_type,
+                "amount": amount,
+                "currency": currency,
+                "ratio": ratio,
+                "shares_outstanding": shares_outstanding,
+                "payout_date": payout_date,
+                "source_url": source_url,
+                "metadata_json": _json.dumps(metadata_json or {}),
+            },
+        )
+        row = cursor.fetchone()
+        return row["id"] if row else None
+
+
+def get_latest_bank_metrics(ticker: str, limit: int = 4) -> list[dict[str, Any]]:
+    """Get latest bank metrics by period descending."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT *
+            FROM bank_metrics
+            WHERE ticker = %(ticker)s
+            ORDER BY period DESC
+            LIMIT %(limit)s
+            """,
+            {"ticker": ticker, "limit": limit},
+        )
+        return cursor.fetchall()
+
+
+def get_latest_fundamentals_quarterly(ticker: str, limit: int = 6) -> list[dict[str, Any]]:
+    """Get latest fundamentals quarterly rows."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT *
+            FROM fundamentals_quarterly
+            WHERE ticker = %(ticker)s
+            ORDER BY period DESC
+            LIMIT %(limit)s
+            """,
+            {"ticker": ticker, "limit": limit},
+        )
+        return cursor.fetchall()
+
+
+def get_recent_corporate_actions(ticker: str, years: int = 5) -> list[dict[str, Any]]:
+    """Get recent corporate actions for memo/monitoring usage."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT *
+            FROM corporate_actions
+            WHERE ticker = %(ticker)s
+              AND action_date >= (CURRENT_DATE - (%(years)s::int * INTERVAL '1 year'))
+            ORDER BY action_date DESC
+            """,
+            {"ticker": ticker, "years": years},
+        )
+        return cursor.fetchall()
+

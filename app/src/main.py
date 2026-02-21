@@ -1060,6 +1060,17 @@ def _run_memo_pipeline(ticker: str, period: str, days: int,
     """Run data collection pipeline for memo generation (lightweight)."""
     results = {}
 
+    # Step 0: Indonesia fundamentals enrichment (P0)
+    try:
+        from .collectors.indonesia_fundamentals import collect_indonesia_fundamentals
+        id_result = collect_indonesia_fundamentals(ticker)
+        results["indonesia_fundamentals"] = id_result
+        if audit:
+            audit.record_step("indonesia_fundamentals", details=id_result)
+    except Exception as e:
+        logger.warning(f"Indonesia fundamentals enrichment failed: {e}")
+        results["indonesia_fundamentals"] = {"status": "failed", "error": str(e)}
+
     # Step 1: Financial data from yfinance
     try:
         from .collectors.yfinance_fundamentals import fetch_fundamentals
@@ -1158,6 +1169,41 @@ def _run_memo_pipeline(ticker: str, period: str, days: int,
     return results
 
 
+@cli.command("run-id-fundamentals")
+@click.option("--ticker", "-t", required=True, help="Indonesia ticker (e.g., BBCA.JK, BMRI.JK)")
+def run_id_fundamentals(ticker: str):
+    """Collect Indonesia-specific fundamentals + bank KPIs + corporate actions."""
+    console.print(f"\n[bold blue]═══ Indonesia Fundamentals: {ticker} ═══[/bold blue]\n")
+    try:
+        from .collectors.indonesia_fundamentals import collect_indonesia_fundamentals
+
+        result = collect_indonesia_fundamentals(ticker)
+        status = result.get("status", "unknown")
+        if status == "success":
+            console.print("[green]✅ Collection completed[/green]")
+        elif status == "skipped":
+            console.print(f"[yellow]⚠ Skipped: {result.get('reason', 'N/A')}[/yellow]")
+        else:
+            console.print(f"[red]❌ Status: {status}[/red]")
+
+        table = Table(title="Indonesia Fundamentals Result")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+        for key in [
+            "fundamentals_upserted",
+            "bank_metrics_upserted",
+            "corporate_actions_inserted",
+            "idx_filings_inserted",
+        ]:
+            table.add_row(key, str(result.get(key, 0)))
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        logger.exception("run-id-fundamentals failed")
+        sys.exit(1)
+
+
 @cli.command("run-universe")
 @click.option("--watchlist", "-w", required=True, help="Path to YAML watchlist file")
 @click.option("--period", "-p", default=None, help="Reporting period")
@@ -1228,6 +1274,144 @@ def run_universe(watchlist: str, period: Optional[str], days: int, output: str):
         sys.exit(1)
 
 
+@cli.command("run-watchlist")
+@click.option("--file", "-f", required=True, help="Path to watchlist JSON/YAML file")
+@click.option("--period", "-p", default=None, help="Reporting period (e.g., Q4-2025)")
+@click.option("--days", "-d", default=180, help="Market data history in days")
+@click.option("--output", "-o", default="output", help="Output directory for memos")
+def run_watchlist(file: str, period: Optional[str], days: int, output: str):
+    """Run watchlist monitoring with memo generation + fundamental triggers."""
+    console.print(f"\n[bold blue]═══ Watchlist Monitor: {file} ═══[/bold blue]\n")
+    try:
+        tickers = _load_watchlist_tickers(file)
+        if not tickers:
+            console.print("[red]No tickers found in watchlist file[/red]")
+            return
+
+        trigger_rows = []
+        for i, ticker in enumerate(tickers):
+            console.print(f"[bold cyan]── [{i+1}/{len(tickers)}] {ticker} ──[/bold cyan]")
+
+            pipeline_results = _run_memo_pipeline(ticker, period or "latest", days)
+            from .summary.memo_generator import run_memo_generation
+
+            memo = run_memo_generation(
+                ticker=ticker,
+                period=period or "latest",
+                pipeline_results=pipeline_results,
+                output_dir=output,
+            )
+
+            triggers = _compute_watchlist_triggers(ticker)
+            trigger_rows.append(
+                {
+                    "ticker": ticker,
+                    "rating": memo.get("rating", "N/A"),
+                    "confidence": memo.get("confidence", 0),
+                    "trigger_count": len(triggers),
+                    "triggers": triggers,
+                }
+            )
+
+            if triggers:
+                console.print(f"  [yellow]⚠ Triggered: {', '.join(triggers)}[/yellow]")
+            else:
+                console.print("  [green]✅ No fundamental trigger[/green]")
+
+        table = Table(title="Watchlist Trigger Summary")
+        table.add_column("Ticker", style="cyan")
+        table.add_column("Rating")
+        table.add_column("Confidence")
+        table.add_column("Triggers")
+
+        for row in trigger_rows:
+            trig = str(row["trigger_count"])
+            color = "red" if row["trigger_count"] > 0 else "green"
+            table.add_row(
+                row["ticker"],
+                row["rating"],
+                f"{row['confidence']:.0%}" if row["confidence"] is not None else "N/A",
+                f"[{color}]{trig}[/{color}]",
+            )
+
+        console.print("")
+        console.print(table)
+
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        logger.exception("Watchlist monitor failed")
+        sys.exit(1)
+
+
+def _load_watchlist_tickers(path: str) -> list[str]:
+    p = Path(path)
+    if not p.exists():
+        raise FileNotFoundError(path)
+    suffix = p.suffix.lower()
+    if suffix == ".json":
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    else:
+        import yaml
+
+        with open(p, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+
+    tickers = data.get("tickers", []) if isinstance(data, dict) else data
+    return [str(t).strip() for t in tickers if str(t).strip()]
+
+
+def _compute_watchlist_triggers(ticker: str) -> list[str]:
+    from .db import get_db_cursor
+
+    triggers: list[str] = []
+    with get_db_cursor() as cur:
+        cur.execute(
+            """
+            SELECT period, revenue, total_debt
+            FROM fundamentals_quarterly
+            WHERE ticker = %(t)s
+            ORDER BY period DESC
+            LIMIT 3
+            """,
+            {"t": ticker},
+        )
+        fq = cur.fetchall()
+
+        cur.execute(
+            """
+            SELECT period, npl, car_kpmm
+            FROM bank_metrics
+            WHERE ticker = %(t)s
+            ORDER BY period DESC
+            LIMIT 3
+            """,
+            {"t": ticker},
+        )
+        bm = cur.fetchall()
+
+    if len(fq) >= 3:
+        rev = [float(r["revenue"]) if r.get("revenue") is not None else None for r in fq]
+        debt = [float(r["total_debt"]) if r.get("total_debt") is not None else None for r in fq]
+
+        if rev[0] is not None and rev[1] is not None and rev[2] is not None and rev[0] < rev[1] < rev[2]:
+            triggers.append("Revenue turun 2Q")
+
+        if debt[0] is not None and debt[1] is not None and debt[0] > debt[1] * 1.05:
+            triggers.append("Debt naik")
+
+    if len(bm) >= 2:
+        npl = [float(r["npl"]) if r.get("npl") is not None else None for r in bm]
+        car = [float(r["car_kpmm"]) if r.get("car_kpmm") is not None else None for r in bm]
+
+        if npl[0] is not None and npl[1] is not None and npl[0] > npl[1] + 0.002:
+            triggers.append("NPL naik")
+        if car[0] is not None and car[1] is not None and car[0] < car[1] - 0.005:
+            triggers.append("CAR turun")
+
+    return triggers
+
+
 @cli.command("run-diff")
 @click.option("--ticker", "-t", required=True, help="Stock ticker")
 @click.option("--from", "from_period", required=True, help="Earlier period (e.g., Q3-2025)")
@@ -1288,6 +1472,125 @@ def run_diff(ticker: str, from_period: str, to_period: str):
         console.print(f"[bold red]Error: {e}[/bold red]")
         logger.exception("Diff generation failed")
         sys.exit(1)
+
+
+@cli.command("run-backtest")
+@click.option("--ticker", "-t", required=True, help="Ticker (e.g., BBCA.JK)")
+@click.option("--start", required=True, help="Start date YYYY-MM-DD")
+@click.option("--end", default=None, help="End date YYYY-MM-DD")
+@click.option("--model", default="lgbm", help="Model tag (default: lgbm)")
+def run_backtest(ticker: str, start: str, end: Optional[str], model: str):
+    """Lightweight signal backtest for swing strategy."""
+    console.print(f"\n[bold blue]═══ Backtest: {ticker} ({model}) ═══[/bold blue]\n")
+    try:
+        result = _run_signal_backtest(ticker, start, end)
+
+        table = Table(title="Backtest Result")
+        table.add_column("Metric", style="cyan")
+        table.add_column("Value", style="green")
+        table.add_row("Ticker", ticker)
+        table.add_row("Period", f"{start} → {end or 'latest'}")
+        table.add_row("Trades", str(result.get("trades", 0)))
+        table.add_row("Winrate", f"{result.get('winrate', 0):.1%}")
+        table.add_row("Max Drawdown", f"{result.get('max_drawdown', 0):.1%}")
+        table.add_row("Expectancy", f"{result.get('expectancy', 0):.2%}")
+        table.add_row("Total Return", f"{result.get('total_return', 0):.1%}")
+        console.print(table)
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        logger.exception("Backtest failed")
+        sys.exit(1)
+
+
+def _run_signal_backtest(ticker: str, start: str, end: Optional[str]) -> dict:
+    from .analysis.model_trainer import fetch_training_data, engineer_features
+    from .analysis.model_predictor import load_model
+
+    artifact = load_model(ticker)
+    if not artifact:
+        raise RuntimeError("Model not found. Train first with run-train-model.")
+
+    model = artifact["model"]
+    feature_cols = artifact["features"]
+
+    df = fetch_training_data(ticker)
+    if df.empty:
+        raise RuntimeError("No market data found for backtest")
+
+    df = engineer_features(df).dropna().copy()
+    df = df[df.index >= start]
+    if end:
+        df = df[df.index <= end]
+    if len(df) < 50:
+        raise RuntimeError("Insufficient rows for backtest")
+
+    for col in feature_cols:
+        if col not in df.columns:
+            df[col] = 0.0
+
+    X = df[feature_cols].fillna(0)
+    preds = model.predict(X)
+
+    position = 0
+    entry_price = 0.0
+    stop = None
+    trade_returns: list[float] = []
+    equity = [1.0]
+
+    for i in range(len(df)):
+        price = float(df["close"].iloc[i])
+        atr = float(df["ATR_14"].iloc[i]) if "ATR_14" in df.columns else 0.0
+        cls = int(preds[i].argmax())
+
+        if position == 0 and cls >= 3:  # Buy/Strong Buy
+            position = 1
+            entry_price = price
+            stop = price - 2.0 * atr if atr > 0 else price * 0.95
+            continue
+
+        if position == 1:
+            exit_signal = cls <= 2
+            stop_hit = stop is not None and price <= stop
+            if exit_signal or stop_hit:
+                ret = (price - entry_price) / entry_price
+                trade_returns.append(ret)
+                equity.append(equity[-1] * (1 + ret))
+                position = 0
+                entry_price = 0.0
+                stop = None
+
+    if position == 1:
+        last_price = float(df["close"].iloc[-1])
+        ret = (last_price - entry_price) / entry_price
+        trade_returns.append(ret)
+        equity.append(equity[-1] * (1 + ret))
+
+    trades = len(trade_returns)
+    wins = sum(1 for r in trade_returns if r > 0)
+    winrate = wins / trades if trades else 0.0
+    avg_win = sum(r for r in trade_returns if r > 0) / max(1, wins)
+    losses = sum(1 for r in trade_returns if r <= 0)
+    avg_loss = sum(r for r in trade_returns if r <= 0) / max(1, losses)
+    expectancy = winrate * avg_win + (1 - winrate) * avg_loss if trades else 0.0
+
+    peak = equity[0]
+    max_dd = 0.0
+    for e in equity:
+        if e > peak:
+            peak = e
+        dd = (e / peak) - 1.0
+        if dd < max_dd:
+            max_dd = dd
+
+    total_return = equity[-1] - 1.0
+
+    return {
+        "trades": trades,
+        "winrate": winrate,
+        "max_drawdown": abs(max_dd),
+        "expectancy": expectancy,
+        "total_return": total_return,
+    }
 
 
 @cli.command("run-thesis")

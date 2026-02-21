@@ -66,12 +66,12 @@ docker compose up -d
 docker compose ps
 ```
 
-| Service | URL | Credentials |
-|---------|-----|-------------|
-| PostgreSQL | localhost:5433 | ag / agpass |
-| MinIO API | localhost:9000 | minio / minio12345 |
+| Service       | URL            | Credentials        |
+| ------------- | -------------- | ------------------ |
+| PostgreSQL    | localhost:5433 | ag / agpass        |
+| MinIO API     | localhost:9000 | minio / minio12345 |
 | MinIO Console | localhost:9001 | minio / minio12345 |
-| Prefect UI | localhost:4200 | — |
+| Prefect UI    | localhost:4200 | —                  |
 
 ### Step 2 — Install Python Dependencies
 
@@ -97,9 +97,16 @@ docker exec -it ag-postgres psql -U ag -d antigravity -c "\dt"
 Expected tables: `fetch_jobs`, `news_items`, `financial_facts`, `scores_financial`, `news_sentiment`, `market_prices`, `company_summary`
 
 > **Note**: If you added tables after initial setup, re-apply the schema:
+>
 > ```bash
 > docker exec -i ag-postgres psql -U ag -d antigravity < schema.sql
 > ```
+
+For incremental rollout (without reapplying full schema), run:
+
+```bash
+docker exec -i ag-postgres psql -U ag -d antigravity < migrations/20260221_id_fundamentals_p0_p2.sql
+```
 
 ### Step 4 — Run the Pipeline (Step-by-Step)
 
@@ -141,98 +148,127 @@ poetry run python -m src.main run-flow --type all
 
 ## CLI Commands
 
-| Command | Description | Key Options |
-|---------|-------------|-------------|
-| `run-news` | Scrape RSS feeds | `-f URL`, `-F file.json` |
-| `run-reports` | Crawl & download reports | `-p URL`, `--playwright`, `--limit N` |
-| `run-parse` | Parse reports → financial_facts | `--ticker TICKER` |
-| `run-market` | Fetch OHLCV from Yahoo Finance | `--ticker TICKER`, `--days N` |
-| `run-analyze` | Financial scoring + sentiment | `--ticker TICKER`, `--period PERIOD` |
-| `run-summary` | Generate narrative summary | `--ticker TICKER`, `--period PERIOD` |
-| `run-flow` | Run Prefect orchestration | `--type all\|news\|reports` |
-| `check-config` | Display current configuration | — |
-| `init-storage` | Initialize MinIO bucket | — |
+| Command               | Description                                                    | Key Options                              |
+| --------------------- | -------------------------------------------------------------- | ---------------------------------------- |
+| `run-news`            | Scrape RSS feeds                                               | `-f URL`, `-F file.json`                 |
+| `run-reports`         | Crawl & download reports                                       | `-p URL`, `--playwright`, `--limit N`    |
+| `run-parse`           | Parse reports → financial_facts                                | `--ticker TICKER`                        |
+| `run-market`          | Fetch OHLCV from Yahoo Finance                                 | `--ticker TICKER`, `--days N`            |
+| `run-analyze`         | Financial scoring + sentiment                                  | `--ticker TICKER`, `--period PERIOD`     |
+| `run-summary`         | Generate narrative summary                                     | `--ticker TICKER`, `--period PERIOD`     |
+| `run-flow`            | Run Prefect orchestration                                      | `--type all\|news\|reports`              |
+| `run-id-fundamentals` | Collect IDX/IR fundamentals + bank metrics + corporate actions | `--ticker BBCA.JK`                       |
+| `run-watchlist`       | Generate memos for watchlist and flag fundamental triggers     | `--file watchlist.json --period Q4-2025` |
+| `run-backtest`        | Lightweight swing signal backtest (ATR stop)                   | `--ticker BBCA.JK --start 2022-01-01`    |
+| `check-config`        | Display current configuration                                  | —                                        |
+| `init-storage`        | Initialize MinIO bucket                                        | —                                        |
 
 ## Database Tables
 
 ### Original Tables
 
-| Table | Purpose |
-|-------|---------|
-| `fetch_jobs` | Tracks all fetch operations (status, checksum, MinIO key) |
-| `news_items` | Parsed news articles (title, body, URL dedup) |
+| Table             | Purpose                                                                     |
+| ----------------- | --------------------------------------------------------------------------- |
+| `fetch_jobs`      | Tracks all fetch operations (status, checksum, MinIO key)                   |
+| `news_items`      | Parsed news articles (title, body, URL dedup)                               |
 | `financial_facts` | Extracted financial metrics (ticker, period, metric, value, unit, currency) |
 
 ### New Analytics Tables
 
-| Table | Purpose |
-|-------|---------|
+| Table              | Purpose                                                  |
+| ------------------ | -------------------------------------------------------- |
 | `scores_financial` | Financial scores 0-100 with `drivers_json` (explainable) |
-| `news_sentiment` | Sentiment + impact + `events_json` + `sources_json` |
-| `market_prices` | Daily OHLCV data (unique per ticker+date) |
-| `company_summary` | Rating + narrative + `evidence_json` (explainable) |
+| `news_sentiment`   | Sentiment + impact + `events_json` + `sources_json`      |
+| `market_prices`    | Daily OHLCV data (unique per ticker+date)                |
+| `company_summary`  | Rating + narrative + `evidence_json` (explainable)       |
+
+### Indonesia-Focused Tables
+
+| Table                    | Purpose                                                                      |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| `idx_filings`            | Metadata IDX/IR filing (url, date, period, jenis dokumen)                    |
+| `fundamentals_quarterly` | Quarterly fundamentals with `currency`, `unit`, `scale` metadata             |
+| `bank_metrics`           | Bank KPI (`nim`, `npl`, `car_kpmm`, `ldr`, `casa`, `bopo`, `cost_of_credit`) |
+| `corporate_actions`      | Dividend/split/reverse split/rights issue/share-count history                |
+
+## Indonesia Workflow (P0/P1/P2)
+
+```bash
+# 1) Enrich Indonesia fundamentals first
+cd app
+poetry run python -m src.main run-id-fundamentals --ticker BMRI.JK
+
+# 2) Generate memo (now includes Trade Plan section)
+poetry run python -m src.main run-memo --ticker BMRI.JK --period Q4-2025
+
+# 3) Monitor watchlist with trigger flags
+poetry run python -m src.main run-watchlist --file ../watchlist.id.example.json --period Q4-2025
+
+# 4) Run lightweight swing backtest
+poetry run python -m src.main run-backtest --ticker BBCA.JK --start 2022-01-01 --model lgbm
+```
 
 ## Financial Scoring
 
 Metrics computed from `financial_facts`:
 
-| Metric | Formula |
-|--------|---------|
-| `revenue_yoy` | (rev_current − rev_prior_year) / rev_prior_year |
-| `revenue_qoq` | (rev_current − rev_prior_quarter) / rev_prior_quarter |
-| `net_margin` | net_income / revenue |
-| `op_margin` | operating_income / revenue |
-| `ocf` | operating_cash_flow (normalized) |
-| `fcf` | ocf − capex |
-| `debt_to_equity` | total_debt / total_equity |
+| Metric           | Formula                                               |
+| ---------------- | ----------------------------------------------------- |
+| `revenue_yoy`    | (rev_current − rev_prior_year) / rev_prior_year       |
+| `revenue_qoq`    | (rev_current − rev_prior_quarter) / rev_prior_quarter |
+| `net_margin`     | net_income / revenue                                  |
+| `op_margin`      | operating_income / revenue                            |
+| `ocf`            | operating_cash_flow (normalized)                      |
+| `fcf`            | ocf − capex                                           |
+| `debt_to_equity` | total_debt / total_equity                             |
 
 **Weights** (configurable via env vars):
 
-| Weight | Default | Env Var |
-|--------|---------|---------|
-| Revenue Growth (YoY) | 0.20 | `WEIGHT_REVENUE_GROWTH` |
-| Net Margin | 0.15 | `WEIGHT_NET_MARGIN` |
-| Operating Margin | 0.15 | `WEIGHT_OP_MARGIN` |
-| Free Cash Flow | 0.15 | `WEIGHT_FCF` |
-| Debt/Equity | 0.10 | `WEIGHT_DEBT_EQUITY` |
-| Operating Cash Flow | 0.10 | `WEIGHT_OCF` |
-| Revenue Growth (QoQ) | 0.15 | `WEIGHT_REVENUE_QOQ` |
+| Weight               | Default | Env Var                 |
+| -------------------- | ------- | ----------------------- |
+| Revenue Growth (YoY) | 0.20    | `WEIGHT_REVENUE_GROWTH` |
+| Net Margin           | 0.15    | `WEIGHT_NET_MARGIN`     |
+| Operating Margin     | 0.15    | `WEIGHT_OP_MARGIN`      |
+| Free Cash Flow       | 0.15    | `WEIGHT_FCF`            |
+| Debt/Equity          | 0.10    | `WEIGHT_DEBT_EQUITY`    |
+| Operating Cash Flow  | 0.10    | `WEIGHT_OCF`            |
+| Revenue Growth (QoQ) | 0.15    | `WEIGHT_REVENUE_QOQ`    |
 
 ## Supported Metric Mapping
 
 The parser maps financial account names (EN + ID) to 10 standard metrics:
 
-| Standard Metric | English Names | Indonesian Names |
-|----------------|---------------|-----------------|
-| `revenue` | Total Revenue, Net Sales | Pendapatan, Penjualan |
-| `gross_profit` | Gross Profit | Laba Kotor |
-| `operating_income` | Operating Income | Laba Usaha, Laba Operasi |
-| `net_income` | Net Income, Net Profit | Laba Bersih |
-| `operating_cash_flow` | Cash from Operations | Arus Kas dari Aktivitas Operasi |
-| `capex` | Capital Expenditures | Belanja Modal |
-| `total_assets` | Total Assets | Total Aset |
-| `total_liabilities` | Total Liabilities | Total Liabilitas |
-| `total_equity` | Total Equity | Total Ekuitas |
-| `total_debt` | Total Debt | Total Utang |
+| Standard Metric       | English Names            | Indonesian Names                |
+| --------------------- | ------------------------ | ------------------------------- |
+| `revenue`             | Total Revenue, Net Sales | Pendapatan, Penjualan           |
+| `gross_profit`        | Gross Profit             | Laba Kotor                      |
+| `operating_income`    | Operating Income         | Laba Usaha, Laba Operasi        |
+| `net_income`          | Net Income, Net Profit   | Laba Bersih                     |
+| `operating_cash_flow` | Cash from Operations     | Arus Kas dari Aktivitas Operasi |
+| `capex`               | Capital Expenditures     | Belanja Modal                   |
+| `total_assets`        | Total Assets             | Total Aset                      |
+| `total_liabilities`   | Total Liabilities        | Total Liabilitas                |
+| `total_equity`        | Total Equity             | Total Ekuitas                   |
+| `total_debt`          | Total Debt               | Total Utang                     |
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `POSTGRES_HOST` | localhost | PostgreSQL host |
-| `POSTGRES_PORT` | 5432 | PostgreSQL port |
-| `POSTGRES_USER` | ag | Database user |
-| `POSTGRES_PASSWORD` | agpass | Database password |
-| `POSTGRES_DB` | antigravity | Database name |
-| `MINIO_ENDPOINT` | http://localhost:9000 | MinIO API |
-| `MINIO_ACCESS_KEY` | minio | MinIO access key |
-| `MINIO_SECRET_KEY` | minio12345 | MinIO secret key |
-| `MINIO_BUCKET` | raw | Target bucket |
-| `RATE_LIMIT_MIN` | 1 | Min delay (seconds) |
-| `RATE_LIMIT_MAX` | 5 | Max delay (seconds) |
-| `MAX_RETRIES` | 3 | Retry attempts |
-| `LOG_LEVEL` | INFO | Logging level |
-| `WEIGHT_*` | (see above) | Scoring weight overrides |
+| Variable            | Default               | Description              |
+| ------------------- | --------------------- | ------------------------ |
+| `POSTGRES_HOST`     | localhost             | PostgreSQL host          |
+| `POSTGRES_PORT`     | 5432                  | PostgreSQL port          |
+| `POSTGRES_USER`     | ag                    | Database user            |
+| `POSTGRES_PASSWORD` | agpass                | Database password        |
+| `POSTGRES_DB`       | antigravity           | Database name            |
+| `MINIO_ENDPOINT`    | http://localhost:9000 | MinIO API                |
+| `MINIO_ACCESS_KEY`  | minio                 | MinIO access key         |
+| `MINIO_SECRET_KEY`  | minio12345            | MinIO secret key         |
+| `MINIO_BUCKET`      | raw                   | Target bucket            |
+| `RATE_LIMIT_MIN`    | 1                     | Min delay (seconds)      |
+| `RATE_LIMIT_MAX`    | 5                     | Max delay (seconds)      |
+| `MAX_RETRIES`       | 3                     | Retry attempts           |
+| `LOG_LEVEL`         | INFO                  | Logging level            |
+| `WEIGHT_*`          | (see above)           | Scoring weight overrides |
 
 ## Verify Results
 

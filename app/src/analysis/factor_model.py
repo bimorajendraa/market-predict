@@ -344,30 +344,11 @@ def get_metrics_from_yfinance(ticker: str) -> dict[str, float]:
         # Filter None values
         cleaned = {k: v for k, v in metrics.items() if v is not None}
 
-        # ── Sanity checks: cap/drop extreme values ──
-        # Market cap: drop if clearly wrong (>$5T or ≤0)
-        mc = cleaned.get("market_cap")
-        if mc is not None and (mc > 5e12 or mc <= 0):
-            logger.warning(
-                f"Suspect market_cap={mc:.0f} for {ticker} — dropping from metrics"
-            )
-            cleaned.pop("market_cap", None)
-
-        # Dividend yield: cap at 30% (values like 197%/319% are data errors)
-        dy = cleaned.get("dividend_yield")
-        if dy is not None and dy > 0.30:
-            logger.warning(
-                f"Suspect dividend_yield={dy:.2%} for {ticker} — capping at 30%"
-            )
-            cleaned["dividend_yield"] = 0.30
-
-        # Debt-to-equity: cap at 10x to prevent extreme distortion
-        dte = cleaned.get("debt_to_equity")
-        if dte is not None and dte > 10.0:
-            logger.warning(
-                f"Extreme debt_to_equity={dte:.2f} for {ticker} — capping at 10.0"
-            )
-            cleaned["debt_to_equity"] = 10.0
+        # ── Currency-aware sanity checks ──
+        from .currency_utils import detect_currency, sanitize_metrics
+        from .sector_scoring import detect_sector
+        currency = detect_currency(ticker)
+        cleaned = sanitize_metrics(cleaned, currency, ticker, sector=detect_sector(ticker))
 
         return cleaned
 

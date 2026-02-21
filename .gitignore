@@ -12,6 +12,16 @@ venv/
 # Environment variables
 .env
 
+# Models — store in artifact storage, not git
+app/models/*.pkl
+
+# Testing
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
 # OS junk
 .DS_Store
 Thumbs.db

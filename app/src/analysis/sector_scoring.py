@@ -29,11 +29,18 @@ TICKER_SECTORS: dict[str, str] = {
     "ADRO": "commodities", "ITMG": "commodities",
     # Indonesian Real Estate/Property
     "BSDE": "real_estate", "CTRA": "real_estate", "SMRA": "real_estate",
+    # Indonesian Tower/Infrastructure
+    "TOWR": "tower_infra", "TBIG": "tower_infra",
+    "JSMR": "infrastructure", "WIKA": "infrastructure", "WSKT": "infrastructure",
     # US Tech
     "AAPL": "tech", "MSFT": "tech", "GOOGL": "tech", "AMZN": "tech",
     "META": "tech", "NVDA": "tech", "ORCL": "tech", "CRM": "tech",
-    "INTC": "tech", "AMD": "tech", "TSLA": "tech", "NFLX": "tech",
+    "INTC": "tech", "AMD": "tech", "TSLA": "tech",
     "ADBE": "tech", "NOW": "tech", "PYPL": "tech",
+    # Streaming
+    "NFLX": "streaming", "DIS": "streaming", "SPOT": "streaming",
+    # US Tower
+    "AMT": "tower_infra", "CCI": "tower_infra", "SBAC": "tower_infra",
     # US Banking
     "JPM": "banking", "BAC": "banking", "WFC": "banking", "GS": "banking",
     "MS": "banking", "C": "banking",
@@ -149,6 +156,33 @@ SECTOR_WEIGHTS: dict[str, dict[str, float]] = {
         "current_ratio": 2.0,
         "dividend_yield": 2.0,
         "nav_discount": 2.0,
+    },
+    "tower_infra": {
+        "revenue_growth": 1.5,
+        "operating_margin": 2.0,
+        "roe": 1.0,
+        "debt_to_equity": 2.0,
+        "interest_coverage": 2.5,
+        "free_cash_flow_yield": 2.0,
+        "ebitda_margin": 2.0,
+    },
+    "streaming": {
+        "revenue_growth": 2.5,
+        "operating_margin": 1.5,
+        "roe": 1.0,
+        "subscriber_growth": 2.5,
+        "free_cash_flow_yield": 1.5,
+        "debt_to_equity": 1.0,
+        "pe_ratio": 1.5,
+    },
+    "infrastructure": {
+        "revenue_growth": 1.0,
+        "operating_margin": 1.5,
+        "roe": 1.5,
+        "debt_to_equity": 2.5,
+        "current_ratio": 1.5,
+        "interest_coverage": 2.0,
+        "free_cash_flow_yield": 1.5,
     },
     "general": {
         # Default balanced weights
@@ -289,6 +323,34 @@ RISK_FLAG_DEFINITIONS = {
         "severity": "warning",
         "message": "Interest coverage below 3x: debt service at risk",
         "sectors": ["commodities", "real_estate"],
+    },
+
+    # ── Tower/Infra-specific ──
+    "tower_high_leverage": {
+        "metric": "net_debt_to_ebitda",
+        "threshold": 5.0,
+        "direction": "above",
+        "severity": "warning",
+        "message": "Net debt/EBITDA > 5x: high leverage for tower company",
+        "sectors": ["tower_infra"],
+    },
+    "tower_low_interest_cover": {
+        "metric": "interest_coverage",
+        "threshold": 2.0,
+        "direction": "below",
+        "severity": "warning",
+        "message": "Interest coverage < 2x: debt servicing at risk",
+        "sectors": ["tower_infra", "infrastructure"],
+    },
+
+    # ── Streaming-specific ──
+    "streaming_content_bloat": {
+        "metric": "content_spend_ratio",
+        "threshold": 0.60,
+        "direction": "above",
+        "severity": "caution",
+        "message": "Content spend > 60% of revenue: margin compression risk",
+        "sectors": ["streaming"],
     },
 }
 
