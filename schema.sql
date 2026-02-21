@@ -168,3 +168,94 @@ CREATE TRIGGER update_news_items_updated_at
     BEFORE UPDATE ON news_items
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- Table: filings_raw
+-- Stores raw SEC/IDX filings with hash for audit
+-- ============================================
+CREATE TABLE IF NOT EXISTS filings_raw (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    ticker VARCHAR(20) NOT NULL,
+    source VARCHAR(50) NOT NULL,          -- 'sec_edgar', 'idx', 'ir_page'
+    filing_type VARCHAR(20) NOT NULL,     -- '10-K', '10-Q', '8-K', 'annual_report'
+    filing_date DATE,
+    url TEXT NOT NULL,
+    sha256 VARCHAR(64),
+    stored_path TEXT,                     -- MinIO object key
+    accession_number VARCHAR(50),         -- SEC-specific
+    cik VARCHAR(20),
+    fetched_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_filings_raw_ticker ON filings_raw(ticker);
+CREATE INDEX IF NOT EXISTS idx_filings_raw_type ON filings_raw(filing_type);
+CREATE INDEX IF NOT EXISTS idx_filings_raw_date ON filings_raw(filing_date);
+
+-- ============================================
+-- Table: filings_extracted
+-- Structured metrics extracted from raw filings
+-- ============================================
+CREATE TABLE IF NOT EXISTS filings_extracted (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    filing_id UUID NOT NULL REFERENCES filings_raw(id) ON DELETE CASCADE,
+    metric VARCHAR(100) NOT NULL,
+    value DECIMAL(20, 4),
+    unit VARCHAR(50),
+    period_end DATE,
+    context VARCHAR(200),                 -- XBRL context or section reference
+    confidence DECIMAL(3, 2) DEFAULT 1.0, -- 0-1 extraction confidence
+    extractor_version VARCHAR(20) DEFAULT 'v1',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_filings_extracted_filing ON filings_extracted(filing_id);
+CREATE INDEX IF NOT EXISTS idx_filings_extracted_metric ON filings_extracted(metric);
+
+-- ============================================
+-- Table: thesis
+-- Investment thesis per ticker (bull/base/bear)
+-- ============================================
+CREATE TABLE IF NOT EXISTS thesis (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    ticker VARCHAR(20) NOT NULL,
+    sector VARCHAR(50),
+    base_thesis TEXT NOT NULL,
+    bull_case TEXT,
+    bear_case TEXT,
+    kpis_json JSONB NOT NULL DEFAULT '[]',
+    triggers_json JSONB NOT NULL DEFAULT '[]',
+    status VARCHAR(20) DEFAULT 'on_track', -- 'on_track', 'at_risk', 'broken'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_thesis_ticker ON thesis(ticker);
+
+DROP TRIGGER IF EXISTS update_thesis_updated_at ON thesis;
+CREATE TRIGGER update_thesis_updated_at
+    BEFORE UPDATE ON thesis
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================
+-- Table: pipeline_runs
+-- Audit trail for reproducibility
+-- ============================================
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    ticker VARCHAR(20) NOT NULL,
+    period VARCHAR(20),
+    run_type VARCHAR(30) NOT NULL DEFAULT 'pipeline', -- 'pipeline', 'memo', 'thesis'
+    config_snapshot JSONB NOT NULL DEFAULT '{}',
+    sources_json JSONB NOT NULL DEFAULT '[]',
+    row_counts_json JSONB NOT NULL DEFAULT '{}',
+    status VARCHAR(20) NOT NULL DEFAULT 'running',    -- 'running', 'completed', 'failed'
+    error TEXT,
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    completed_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_runs_ticker ON pipeline_runs(ticker);
+CREATE INDEX IF NOT EXISTS idx_pipeline_runs_status ON pipeline_runs(status);
