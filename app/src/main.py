@@ -610,8 +610,32 @@ def run_pipeline(ticker: str, period: Optional[str], days: int, playwright: bool
             results["reports"] = {"status": "success", "jobs": len(job_ids), "pages": len(ir_page_list)}
             console.print(f"  [green][OK] Downloaded {len(job_ids)} reports[/green]")
         else:
-            results["reports"] = {"status": "skipped", "reason": "No IR pages found"}
+            results["reports"] = {"status": "skipped", "reason": "No IR pages found", "jobs": 0}
             console.print(f"  [yellow][!] No IR pages found for {ticker} -- skipping[/yellow]")
+
+        # SEC EDGAR fallback for US tickers
+        reports_downloaded = results.get("reports", {}).get("jobs", 0)
+        is_us_ticker = not ticker.upper().endswith(".JK")
+
+        if is_us_ticker and reports_downloaded == 0:
+            console.print("\n  [bold cyan]>> Step 2b: SEC EDGAR Fallback[/bold cyan]")
+            try:
+                from .collectors.sec_edgar import collect_sec_filings
+                sec_result = collect_sec_filings(ticker, max_downloads=5)
+                sec_downloaded = sec_result.get("downloaded", 0)
+                sec_status = sec_result.get("primary_source_status", "NOT_FOUND")
+                results["sec_edgar"] = sec_result
+
+                if sec_downloaded > 0:
+                    results["reports"]["jobs"] = results["reports"].get("jobs", 0) + sec_downloaded
+                    results["reports"]["sec_filings"] = sec_downloaded
+                    console.print(f"  [green][OK] SEC EDGAR: {sec_downloaded} filings downloaded[/green]")
+                else:
+                    console.print(f"  [yellow][!] SEC EDGAR: status={sec_status}, 0 filings downloaded[/yellow]")
+            except Exception as e:
+                results["sec_edgar"] = {"status": "failed", "error": str(e)}
+                console.print(f"  [yellow][!] SEC EDGAR fallback failed: {e}[/yellow]")
+
     except Exception as e:
         results["reports"] = {"status": "failed", "error": str(e)}
         console.print(f"  [red][FAIL] Report discovery failed: {e}[/red]")
@@ -744,6 +768,57 @@ def run_pipeline(ticker: str, period: Optional[str], days: int, playwright: bool
     except Exception as e:
         results["technical"] = {"status": "failed", "error": str(e)}
         console.print(f"  [red][FAIL] Technical analysis failed: {e}[/red]")
+
+    # ── Step 6.6: Sector Scoring & Risk Flags ──────────────────────
+    console.print(f"\n[bold cyan]>> Step 6.6: Sector-Aware Scoring[/bold cyan]")
+    try:
+        from .analysis.sector_scoring import compute_sector_score, detect_sector
+        sector = detect_sector(ticker)
+        base_score = results.get("scoring", {}).get("score", 0.0)
+        scoring_drivers = []
+        # Grab drivers from DB if scoring was done
+        if results.get("scoring", {}).get("status") == "success":
+            with get_db_cursor() as cur:
+                cur.execute(
+                    "SELECT drivers_json FROM scores_financial WHERE ticker=%(t)s AND period=%(p)s ORDER BY created_at DESC LIMIT 1",
+                    {"t": ticker, "p": detected_period},
+                )
+                row = cur.fetchone()
+                if row:
+                    import json as _json
+                    drivers_raw = row.get("drivers_json", [])
+                    if isinstance(drivers_raw, str):
+                        scoring_drivers = _json.loads(drivers_raw)
+                    else:
+                        scoring_drivers = drivers_raw
+
+        sector_result = compute_sector_score(ticker, base_score, scoring_drivers)
+        results["sector_scoring"] = {"status": "success", **sector_result}
+        console.print(f"  [green][OK] Sector: {sector} | Score: {sector_result['sector_adjusted_score']:.1f} (base: {base_score:.1f}, risk penalty: -{sector_result['risk_penalty']:.1f})[/green]")
+        if sector_result.get("risk_flags"):
+            for flag in sector_result["risk_flags"]:
+                console.print(f"  [yellow]  ⚠ {flag['message']} ({flag['metric']}={flag['value']})[/yellow]")
+    except Exception as e:
+        results["sector_scoring"] = {"status": "failed", "error": str(e)}
+        console.print(f"  [red][FAIL] Sector scoring failed: {e}[/red]")
+
+    # ── Step 6.7: Valuation Analysis ──────────────────────────────
+    console.print(f"\n[bold cyan]>> Step 6.7: Valuation Analysis[/bold cyan]")
+    valuation_result = {}
+    try:
+        from .analysis.valuation import run_valuation_analysis
+        valuation_result = run_valuation_analysis(ticker)
+        if valuation_result.get("status") == "ok":
+            results["valuation"] = {"status": "success", "verdict": valuation_result.get("verdict")}
+            console.print(f"  [green][OK] Verdict: {valuation_result['verdict'].upper()} — {valuation_result.get('explanation', '')}[/green]")
+            for key, comp in valuation_result.get("comparisons", {}).items():
+                console.print(f"  [dim]  {key}: {comp.get('value')} vs sector {comp.get('sector_median')} ({comp.get('assessment')})[/dim]")
+        else:
+            results["valuation"] = {"status": "skipped", "reason": valuation_result.get("error", "Insufficient data")}
+            console.print(f"  [yellow][!] Valuation: {valuation_result.get('error', 'Insufficient data')}[/yellow]")
+    except Exception as e:
+        results["valuation"] = {"status": "failed", "error": str(e)}
+        console.print(f"  [red][FAIL] Valuation analysis failed: {e}[/red]")
 
     # ── Step 7: AI Model Training & Prediction ───────────────────
     console.print(f"\n[bold cyan]>> Step 7/8: AI Stock Prediction[/bold cyan]")
@@ -921,6 +996,406 @@ def check_config():
         table.add_row(f"  {metric}", f"{weight:.2f}")
 
     console.print(table)
+
+
+# ============================================
+# Institutional Research Commands
+# ============================================
+
+@cli.command("run-memo")
+@click.option("--ticker", "-t", required=True, help="Stock ticker (e.g., ORCL, BBCA.JK)")
+@click.option("--period", "-p", default=None, help="Reporting period (e.g., Q4-2025)")
+@click.option("--days", "-d", default=90, help="Market data history in days")
+@click.option("--output", "-o", default=None, help="Output directory for memo file")
+def run_memo(ticker: str, period: Optional[str], days: int, output: Optional[str]):
+    """Generate institutional investment memo for a ticker."""
+    console.print(f"\n[bold blue]═══ Investment Memo: {ticker} ═══[/bold blue]\n")
+
+    try:
+        from .summary.memo_generator import run_memo_generation
+        from .pipelines.audit import AuditTracker
+
+        # Auto-detect period if not specified
+        if not period:
+            from datetime import datetime as _dt
+            now = _dt.now()
+            quarter = (now.month - 1) // 3 + 1
+            period = f"Q{quarter}-{now.year}"
+            console.print(f"  Auto-detected period: {period}")
+
+        # Start audit tracking
+        audit = AuditTracker(ticker, period, run_type="memo")
+        audit.start(config_snapshot={"days": days, "output": output})
+
+        # Run the underlying pipeline first
+        console.print("\n[bold cyan]>> Running data collection pipeline...[/bold cyan]")
+        pipeline_results = _run_memo_pipeline(ticker, period, days, audit)
+
+        # Generate memo
+        console.print("\n[bold cyan]>> Generating Investment Memo...[/bold cyan]")
+        memo_result = run_memo_generation(
+            ticker=ticker,
+            period=period,
+            pipeline_results=pipeline_results,
+            output_dir=output,
+        )
+
+        audit.complete(status="completed")
+
+        # Display result
+        console.print(f"\n[bold green]✅ Memo saved to: {memo_result['memo_path']}[/bold green]")
+        console.print(f"  Rating: {memo_result.get('rating', 'N/A')}")
+        console.print(f"  Confidence: {memo_result.get('confidence', 0):.0%}")
+        console.print(f"  Thesis: {memo_result.get('thesis_status', 'N/A')}")
+        console.print(f"  Coverage: {'PASS' if memo_result.get('coverage_passed') else 'FAIL'}")
+
+    except Exception as e:
+        console.print(f"\n[bold red]Error generating memo: {e}[/bold red]")
+        logger.exception("Memo generation failed")
+        sys.exit(1)
+
+
+def _run_memo_pipeline(ticker: str, period: str, days: int,
+                       audit=None) -> dict:
+    """Run data collection pipeline for memo generation (lightweight)."""
+    results = {}
+
+    # Step 1: Financial data from yfinance
+    try:
+        from .collectors.yfinance_fundamentals import fetch_fundamentals
+        from .db import insert_financial_fact
+        facts = fetch_fundamentals(ticker)
+        for fact in facts:
+            insert_financial_fact(
+                ticker=fact["ticker"], period=fact["period"],
+                metric=fact["metric"], value=fact["value"],
+                unit=fact.get("unit"), currency=fact.get("currency"),
+                source_url=fact.get("source_url"),
+            )
+        results["financial_facts"] = len(facts)
+        if audit:
+            audit.record_step("financial_facts", details={"count": len(facts)})
+    except Exception as e:
+        logger.warning(f"Financial facts fetch failed: {e}")
+        results["financial_facts"] = 0
+
+    # Step 2: Market prices
+    try:
+        from .market.price_fetcher import run_market_fetch
+        price_result = run_market_fetch(ticker, days=days)
+        price_count = price_result.get("records_upserted", 0)
+        results["market_prices"] = price_count
+        if audit:
+            audit.record_step("market_prices", details={"count": price_count})
+    except Exception as e:
+        logger.warning(f"Market prices fetch failed: {e}")
+        results["market_prices"] = 0
+
+    # Step 3: News sentiment
+    try:
+        from .analysis.news_sentiment import run_news_sentiment
+        sentiment_result = run_news_sentiment(ticker)
+        results["news_sentiment"] = sentiment_result
+        if audit:
+            audit.record_step("news_sentiment")
+    except Exception as e:
+        logger.warning(f"News sentiment failed: {e}")
+        results["news_sentiment"] = {}
+
+    # Step 4: Financial scoring
+    try:
+        from .analysis.financial_scoring import compute_financial_features, compute_score
+        features = compute_financial_features(ticker, period)
+        score, drivers, coverage = compute_score(features, ticker=ticker)
+        score_result = {"score": score, "drivers": drivers, "coverage": coverage}
+        results["financial_score"] = score_result
+        if audit:
+            audit.record_step("financial_scoring", details={"score": score})
+    except Exception as e:
+        logger.warning(f"Financial scoring failed: {e}")
+        results["financial_score"] = {}
+
+    # Step 5: Valuation
+    try:
+        from .analysis.valuation import run_valuation_analysis
+        val_result = run_valuation_analysis(ticker)
+        results["valuation"] = val_result
+        if audit:
+            audit.record_step("valuation")
+    except Exception as e:
+        logger.warning(f"Valuation failed: {e}")
+        results["valuation"] = {}
+
+    # Step 6: Sector scoring
+    try:
+        from .analysis.sector_scoring import compute_sector_score
+        # Use financial score drivers if available
+        fs = results.get("financial_score", {})
+        base_score = fs.get("score", 50)
+        drivers = fs.get("drivers", [])
+        sector_result = compute_sector_score(ticker, base_score, drivers)
+        results["sector_scoring"] = sector_result
+        if audit:
+            audit.record_step("sector_scoring")
+    except Exception as e:
+        logger.warning(f"Sector scoring failed: {e}")
+        results["sector_scoring"] = {}
+
+    # Step 7: Technical analysis
+    try:
+        from .analysis.technical_analysis import run_technical_analysis
+        tech_result = run_technical_analysis(ticker)
+        results["technical"] = tech_result
+        if audit:
+            audit.record_step("technical_analysis")
+    except Exception as e:
+        logger.warning(f"Technical analysis failed: {e}")
+        results["technical"] = {}
+
+    if audit:
+        results["audit"] = audit.get_summary()
+
+    return results
+
+
+@cli.command("run-universe")
+@click.option("--watchlist", "-w", required=True, help="Path to YAML watchlist file")
+@click.option("--period", "-p", default=None, help="Reporting period")
+@click.option("--days", "-d", default=90, help="Market data history in days")
+@click.option("--output", "-o", default="output", help="Output directory for memos")
+def run_universe(watchlist: str, period: Optional[str], days: int, output: str):
+    """Run investment memo generation across a watchlist of tickers."""
+    console.print(f"\n[bold blue]═══ Universe Run: {watchlist} ═══[/bold blue]\n")
+
+    try:
+        import yaml
+        with open(watchlist, "r") as f:
+            data = yaml.safe_load(f)
+
+        tickers = data.get("tickers", []) if isinstance(data, dict) else data
+        if not tickers:
+            console.print("[red]No tickers found in watchlist[/red]")
+            return
+
+        console.print(f"  Found {len(tickers)} tickers: {', '.join(tickers[:10])}")
+
+        results_summary = []
+        for i, ticker in enumerate(tickers):
+            console.print(f"\n[bold cyan]── [{i+1}/{len(tickers)}] {ticker} ──[/bold cyan]")
+            try:
+                from .summary.memo_generator import run_memo_generation
+                pipeline_results = _run_memo_pipeline(ticker, period or "latest", days)
+                memo_result = run_memo_generation(
+                    ticker=ticker,
+                    period=period or "latest",
+                    pipeline_results=pipeline_results,
+                    output_dir=output,
+                )
+                results_summary.append({
+                    "ticker": ticker,
+                    "status": "success",
+                    "rating": memo_result.get("rating"),
+                    "confidence": memo_result.get("confidence"),
+                })
+                console.print(f"  [green]✅ {ticker}: {memo_result.get('rating')} ({memo_result.get('confidence', 0):.0%})[/green]")
+            except Exception as e:
+                results_summary.append({"ticker": ticker, "status": "failed", "error": str(e)})
+                console.print(f"  [red]❌ {ticker}: {e}[/red]")
+
+        # Summary table
+        console.print("\n[bold]═══ Universe Summary ═══[/bold]")
+        table = Table()
+        table.add_column("Ticker", style="cyan")
+        table.add_column("Status")
+        table.add_column("Rating")
+        table.add_column("Confidence")
+        for r in results_summary:
+            status_color = "green" if r["status"] == "success" else "red"
+            table.add_row(
+                r["ticker"],
+                f"[{status_color}]{r['status']}[/{status_color}]",
+                r.get("rating", "N/A"),
+                f"{r.get('confidence', 0):.0%}" if r.get("confidence") else "N/A",
+            )
+        console.print(table)
+
+    except FileNotFoundError:
+        console.print(f"[red]Watchlist file not found: {watchlist}[/red]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        logger.exception("Universe run failed")
+        sys.exit(1)
+
+
+@cli.command("run-diff")
+@click.option("--ticker", "-t", required=True, help="Stock ticker")
+@click.option("--from", "from_period", required=True, help="Earlier period (e.g., Q3-2025)")
+@click.option("--to", "to_period", required=True, help="Later period (e.g., Q4-2025)")
+def run_diff(ticker: str, from_period: str, to_period: str):
+    """Compare a ticker across two periods — show what changed."""
+    console.print(f"\n[bold blue]═══ Period Diff: {ticker} ({from_period} → {to_period}) ═══[/bold blue]\n")
+
+    try:
+        from .db import get_financial_facts
+
+        facts_from = get_financial_facts(ticker, [from_period])
+        facts_to = get_financial_facts(ticker, [to_period])
+
+        # Build metric maps
+        map_from = {f["metric"]: f["value"] for f in facts_from}
+        map_to = {f["metric"]: f["value"] for f in facts_to}
+
+        all_metrics = sorted(set(list(map_from.keys()) + list(map_to.keys())))
+
+        if not all_metrics:
+            console.print(f"[yellow]No financial facts found for {ticker} in either period.[/yellow]")
+            return
+
+        table = Table(title=f"Metric Changes: {ticker}")
+        table.add_column("Metric", style="cyan")
+        table.add_column(from_period, justify="right")
+        table.add_column(to_period, justify="right")
+        table.add_column("Change", justify="right")
+
+        for metric in all_metrics:
+            val_from = map_from.get(metric)
+            val_to = map_to.get(metric)
+
+            from_str = f"{float(val_from):.2f}" if val_from is not None else "—"
+            to_str = f"{float(val_to):.2f}" if val_to is not None else "—"
+
+            if val_from is not None and val_to is not None:
+                change = float(val_to) - float(val_from)
+                if float(val_from) != 0:
+                    pct = (change / abs(float(val_from))) * 100
+                    change_str = f"{change:+.2f} ({pct:+.1f}%)"
+                else:
+                    change_str = f"{change:+.2f}"
+                change_color = "green" if change > 0 else "red" if change < 0 else "white"
+                change_str = f"[{change_color}]{change_str}[/{change_color}]"
+            else:
+                change_str = "N/A"
+
+            table.add_row(metric, from_str, to_str, change_str)
+
+        console.print(table)
+        console.print(f"\n  Metrics compared: {len(all_metrics)}")
+        console.print(f"  In {from_period}: {len(map_from)} metrics")
+        console.print(f"  In {to_period}: {len(map_to)} metrics")
+
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        logger.exception("Diff generation failed")
+        sys.exit(1)
+
+
+@cli.command("run-thesis")
+@click.option("--ticker", "-t", required=True, help="Stock ticker")
+@click.option("--init", "init_flag", is_flag=True, help="Initialize thesis from sector template")
+@click.option("--sector", "-s", default=None, help="Override sector for template")
+def run_thesis(ticker: str, init_flag: bool, sector: Optional[str]):
+    """Initialize or check investment thesis for a ticker."""
+    console.print(f"\n[bold blue]═══ Thesis Tracker: {ticker} ═══[/bold blue]\n")
+
+    try:
+        from .analysis.thesis_tracker import init_thesis, check_thesis, format_thesis_report
+
+        if init_flag:
+            console.print(f"  Initializing thesis for {ticker}...")
+            result = init_thesis(ticker, sector=sector)
+            console.print(f"  [green]✅ Thesis initialized (sector: {result.get('sector', 'N/A')})[/green]")
+            console.print(f"  Status: {result.get('status', 'on_track').upper()}")
+            console.print(f"\n  BASE: {result.get('base_thesis', '')}")
+            console.print(f"  BULL: {result.get('bull_case', '')}")
+            console.print(f"  BEAR: {result.get('bear_case', '')}")
+
+            kpis = result.get("kpis", [])
+            if kpis:
+                console.print(f"\n  KPIs ({len(kpis)}):")
+                for kpi in kpis:
+                    console.print(f"    • {kpi.get('name', '')} (target: {kpi.get('target', '')})")
+        else:
+            result = check_thesis(ticker)
+            report = format_thesis_report(result)
+            console.print(report)
+
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        logger.exception("Thesis operation failed")
+        sys.exit(1)
+
+
+@cli.command("run-quality")
+@click.option("--check", "-c", "check_type", required=True,
+              type=click.Choice(["feeds", "db", "all"]),
+              help="What to check: feeds, db, or all")
+def run_quality(check_type: str):
+    """Run quality/health checks on pipeline infrastructure."""
+    console.print(f"\n[bold blue]═══ Quality Check: {check_type} ═══[/bold blue]\n")
+
+    issues = []
+
+    if check_type in ("feeds", "all"):
+        console.print("[bold cyan]>> Feed Health Check[/bold cyan]")
+        try:
+            from .collectors.feed_health import get_health_manager
+            health = get_health_manager()
+            summary = health.get_health_summary()
+            total = summary.get("total_feeds", 0)
+            healthy = summary.get("healthy_feeds", 0)
+            disabled = summary.get("disabled_feeds", 0)
+
+            console.print(f"  Total feeds tracked: {total}")
+            console.print(f"  Healthy: [green]{healthy}[/green]")
+            if disabled > 0:
+                console.print(f"  Disabled: [red]{disabled}[/red]")
+                issues.append(f"{disabled} feeds disabled")
+
+            # Show disabled feeds
+            disabled_list = summary.get("disabled_list", [])
+            for feed_url in disabled_list:
+                console.print(f"    ❌ {feed_url}")
+
+        except Exception as e:
+            console.print(f"  [red]Feed health check failed: {e}[/red]")
+            issues.append(f"Feed health error: {e}")
+
+    if check_type in ("db", "all"):
+        console.print("\n[bold cyan]>> Database Check[/bold cyan]")
+        try:
+            from .db import get_db_cursor
+            with get_db_cursor() as cursor:
+                tables = [
+                    "fetch_jobs", "news_items", "financial_facts",
+                    "scores_financial", "news_sentiment", "market_prices",
+                    "company_summary", "filings_raw", "filings_extracted",
+                    "thesis", "pipeline_runs",
+                ]
+                for table in tables:
+                    try:
+                        cursor.execute(f"SELECT COUNT(*) as cnt FROM {table}")
+                        result = cursor.fetchone()
+                        count = result["cnt"] if result else 0
+                        color = "green" if count > 0 else "yellow"
+                        console.print(f"  {table}: [{color}]{count} rows[/{color}]")
+                        if count == 0:
+                            issues.append(f"{table} is empty")
+                    except Exception:
+                        console.print(f"  {table}: [red]table not found[/red]")
+                        issues.append(f"{table} table missing — run schema.sql")
+        except Exception as e:
+            console.print(f"  [red]Database check failed: {e}[/red]")
+            issues.append(f"DB connection error: {e}")
+
+    # Summary
+    console.print(f"\n[bold]{'─' * 40}[/bold]")
+    if issues:
+        console.print(f"[yellow]⚠ {len(issues)} issue(s) found:[/yellow]")
+        for issue in issues:
+            console.print(f"  • {issue}")
+    else:
+        console.print("[bold green]✅ All checks passed![/bold green]")
 
 
 if __name__ == "__main__":

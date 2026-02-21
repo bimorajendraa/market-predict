@@ -107,6 +107,7 @@ def run_summary_generation(
     confidence = _compute_strict_confidence(
         score, coverage, computed_drivers, integrity_flag, primary_flag,
         coverage_factor=coverage_factor,
+        ticker=ticker,
     )
 
     # 4. Rating Logic
@@ -144,6 +145,8 @@ def run_summary_generation(
         computed_drivers=computed_drivers,
         ml_prediction=pr.get("ml_prediction", {}),
         technical_levels=technical_levels or {},
+        valuation=pr.get("valuation", {}),
+        sector_scoring=pr.get("sector_scoring", {}),
     )
 
     # 8. Final JSON Output
@@ -186,8 +189,16 @@ def _compute_strict_confidence(
     integrity_flag: str,
     primary_flag: str,
     coverage_factor: float = 1.0,
+    ticker: str = "",
 ) -> float:
-    """Compute confidence score [0.0, 1.0] with strict caps."""
+    """Compute confidence score [0.0, 0.95] with adaptive caps.
+    
+    The primary source cap is now context-aware:
+    - Filing-required sectors (banks) with sparse data: hard 0.60 cap
+    - Strong yfinance data (30+ facts) + good news (20+ items): 0.80 cap
+    - Moderate coverage: 0.70 cap
+    - Sparse data everywhere: 0.60 cap
+    """
     conf = 0.85
     
     # Coverage penalty
@@ -205,15 +216,45 @@ def _compute_strict_confidence(
     if integrity_flag == "FAIL":
         conf -= 0.15
         
-    # Primary Source Cap
+    # Primary Source — Adaptive Cap
     if primary_flag == "MISSING":
-        conf = min(conf, 0.60)
+        financial_facts = coverage.get("financial_facts", 0)
+        is_filing_required = _is_filing_required_sector(ticker)
+        
+        if is_filing_required and financial_facts < 30:
+            # Banks/regulated sectors with sparse data → hard cap
+            conf = min(conf, 0.60)
+        elif financial_facts >= 30 and news_count >= 20:
+            # Strong alternative coverage → mild penalty
+            conf = min(conf, 0.80)
+            conf -= 0.05
+        elif financial_facts >= 10:
+            # Moderate coverage → moderate cap
+            conf = min(conf, 0.70)
+        else:
+            # No alternatives → hard cap
+            conf = min(conf, 0.60)
 
     # Coverage factor penalty: scale confidence by how much data we have
     conf *= coverage_factor
         
-    # Absolute bounds
-    return round(max(0.0, min(1.0, conf)), 2)
+    # Absolute bounds (max 0.95 to reflect uncertainty)
+    return round(max(0.0, min(0.95, conf)), 2)
+
+
+def _is_filing_required_sector(ticker: str) -> bool:
+    """Check if ticker is in a sector that really requires primary filings.
+    
+    Banks and regulated financial institutions in Indonesia need
+    primary filings (OJK data, annual reports) for reliable scoring.
+    yfinance data alone is insufficient for NIM, NPL, CAR metrics.
+    """
+    base_ticker = ticker.split(".")[0].upper() if ticker else ""
+    filing_required_tickers = {
+        "BBCA", "BBRI", "BMRI", "BBNI", "BBTN", "BRIS",
+        "BDMN", "BNGA", "PNBN", "MEGA",
+    }
+    return base_ticker in filing_required_tickers
 
 
 def _check_integrity(ticker: str, sentiment_items: list[dict]) -> tuple[str, list[str]]:
@@ -338,8 +379,11 @@ def _build_narrative(
     *, ticker, period, now_wib, score, base_rating, action_rating, confidence,
     coverage, price_as_of, integrity_flag, missing_urls, primary_flag,
     bank_metrics_missing, evidence_items, return_7d, return_30d, return_90d,
-    computed_drivers, ml_prediction, technical_levels
+    computed_drivers, ml_prediction, technical_levels,
+    valuation=None, sector_scoring=None,
 ) -> str:
+    valuation = valuation or {}
+    sector_scoring = sector_scoring or {}
     L = []
     
     # Header
@@ -360,8 +404,12 @@ def _build_narrative(
         L.append("  [OK] Integrity Pass: All sentiment sources verified in raw DB.")
         
     if primary_flag == "MISSING":
+        financial_facts = coverage.get("financial_facts", 0)
         L.append("  [!] PRIMARY SOURCE MISSING: reports_downloaded=0.")
-        L.append("      Confidence capped at 0.60.")
+        if financial_facts >= 30:
+            L.append(f"      Confidence adjusted (yfinance has {financial_facts} facts).")
+        else:
+            L.append("      Confidence penalized — limited alternative data.")
     else:
         L.append("  [OK] Primary Source: Reports downloaded.")
 
@@ -477,6 +525,31 @@ def _build_narrative(
             L.append(f"    R1={pivot.get('R1')}  R2={pivot.get('R2')}  R3={pivot.get('R3')}")
             L.append(f"    S1={pivot.get('S1')}  S2={pivot.get('S2')}  S3={pivot.get('S3')}")
     L.append("")
+
+    # 7. Valuation
+    if valuation.get("status") == "success":
+        L.append("7. VALUATION")
+        verdict = valuation.get("verdict", "N/A")
+        L.append(f"  Verdict: {verdict.upper()}")
+        # Show comparisons
+        comparisons = valuation.get("comparisons", {})
+        if isinstance(comparisons, dict):  # might be nested from run_valuation_analysis
+            pass  # comparisons are in valuation_result but not directly here
+        L.append("")
+
+    # 8. Sector & Risk Flags
+    if sector_scoring.get("status") == "success":
+        L.append("8. SECTOR & RISK")
+        L.append(f"  Sector: {sector_scoring.get('sector', 'N/A')}")
+        L.append(f"  Score: {sector_scoring.get('sector_adjusted_score', 'N/A')} (risk penalty: -{sector_scoring.get('risk_penalty', 0)})")
+        risk_flags = sector_scoring.get("risk_flags", [])
+        if risk_flags:
+            L.append("  Risk Flags:")
+            for flag in risk_flags:
+                L.append(f"    [{flag.get('severity', '?').upper()}] {flag.get('message', '')}")
+        else:
+            L.append("  No risk flags triggered.")
+        L.append("")
 
     return "\n".join(L)
 

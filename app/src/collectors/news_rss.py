@@ -160,16 +160,26 @@ class RSSCollector(BaseCollector):
     def collect(self, feed_urls: list[str]) -> list[UUID]:
         """
         Collect news from multiple RSS feeds.
-        
+        Skips feeds disabled by health manager, records results.
+
         Args:
             feed_urls: List of RSS feed URLs to scrape
-            
+
         Returns:
             List of inserted news item IDs
         """
+        from .feed_health import get_health_manager
+        health = get_health_manager()
+
+        # Filter out disabled feeds
+        enabled_urls = health.get_enabled_feeds(feed_urls)
+        skipped_disabled = len(feed_urls) - len(enabled_urls)
+        if skipped_disabled > 0:
+            logger.info(f"Skipping {skipped_disabled} disabled feeds")
+
         inserted_ids = []
         
-        for feed_url in feed_urls:
+        for feed_url in enabled_urls:
             logger.info(f"Processing RSS feed: {feed_url}")
             
             # Create fetch job
@@ -192,6 +202,10 @@ class RSSCollector(BaseCollector):
                 )
                 log_job_result(
                     str(job_id), feed_url, "failed", result.duration, result.error
+                )
+                health.record_result(
+                    feed_url, success=False,
+                    http_code=result.http_code, error=result.error
                 )
                 continue
             
@@ -217,6 +231,7 @@ class RSSCollector(BaseCollector):
                 raw_object_key=object_key,
             )
             log_job_result(str(job_id), feed_url, "success", result.duration)
+            health.record_result(feed_url, success=True, http_code=result.http_code)
             
             # Parse and store news items
             items = self.parse_feed(feed_url, result.content)
@@ -249,7 +264,13 @@ class RSSCollector(BaseCollector):
                 else:
                     logger.debug(f"Skipped duplicate: {item['title'][:50]}...")
         
-        logger.info(f"RSS collection complete. Inserted {len(inserted_ids)} new items.")
+        # Log feed health summary
+        report = health.get_health_report()
+        logger.info(
+            f"RSS collection complete. Inserted {len(inserted_ids)} new items. "
+            f"Feed health: {report['enabled']} enabled, {report['disabled']} disabled "
+            f"of {report['total_tracked']} tracked"
+        )
         return inserted_ids
 
 

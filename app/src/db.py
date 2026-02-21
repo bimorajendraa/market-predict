@@ -453,3 +453,271 @@ def get_financial_facts(
             )
         return cursor.fetchall()
 
+
+# ============================================
+# Filings Raw
+# ============================================
+
+def insert_filing_raw(
+    ticker: str,
+    source: str,
+    filing_type: str,
+    url: str,
+    filing_date: Optional[str] = None,
+    sha256: Optional[str] = None,
+    stored_path: Optional[str] = None,
+    accession_number: Optional[str] = None,
+    cik: Optional[str] = None,
+) -> UUID:
+    """Insert a raw filing record for audit trail."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO filings_raw
+                (ticker, source, filing_type, filing_date, url, sha256,
+                 stored_path, accession_number, cik)
+            VALUES
+                (%(ticker)s, %(source)s, %(filing_type)s, %(filing_date)s,
+                 %(url)s, %(sha256)s, %(stored_path)s, %(accession_number)s, %(cik)s)
+            RETURNING id
+            """,
+            {
+                "ticker": ticker,
+                "source": source,
+                "filing_type": filing_type,
+                "filing_date": filing_date,
+                "url": url,
+                "sha256": sha256,
+                "stored_path": stored_path,
+                "accession_number": accession_number,
+                "cik": cik,
+            },
+        )
+        result = cursor.fetchone()
+        return result["id"]
+
+
+def get_filings_for_ticker(
+    ticker: str, filing_type: Optional[str] = None
+) -> list[dict[str, Any]]:
+    """Get raw filings for a ticker, optionally filtered by type."""
+    with get_db_cursor() as cursor:
+        if filing_type:
+            cursor.execute(
+                """
+                SELECT * FROM filings_raw
+                WHERE ticker = %(ticker)s AND filing_type = %(ft)s
+                ORDER BY filing_date DESC
+                """,
+                {"ticker": ticker, "ft": filing_type},
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT * FROM filings_raw
+                WHERE ticker = %(ticker)s
+                ORDER BY filing_date DESC
+                """,
+                {"ticker": ticker},
+            )
+        return cursor.fetchall()
+
+
+# ============================================
+# Filings Extracted
+# ============================================
+
+def insert_filing_extracted(
+    filing_id: UUID,
+    metric: str,
+    value: float,
+    unit: Optional[str] = None,
+    period_end: Optional[str] = None,
+    context: Optional[str] = None,
+    confidence: float = 1.0,
+    extractor_version: str = "v1",
+) -> UUID:
+    """Insert an extracted metric from a filing."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO filings_extracted
+                (filing_id, metric, value, unit, period_end, context,
+                 confidence, extractor_version)
+            VALUES
+                (%(filing_id)s, %(metric)s, %(value)s, %(unit)s,
+                 %(period_end)s, %(context)s, %(confidence)s, %(version)s)
+            RETURNING id
+            """,
+            {
+                "filing_id": filing_id,
+                "metric": metric,
+                "value": value,
+                "unit": unit,
+                "period_end": period_end,
+                "context": context,
+                "confidence": confidence,
+                "version": extractor_version,
+            },
+        )
+        result = cursor.fetchone()
+        return result["id"]
+
+
+def get_extracted_metrics(filing_id: UUID) -> list[dict[str, Any]]:
+    """Get all extracted metrics for a filing."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM filings_extracted WHERE filing_id = %(fid)s ORDER BY metric",
+            {"fid": filing_id},
+        )
+        return cursor.fetchall()
+
+
+# ============================================
+# Thesis
+# ============================================
+
+def insert_thesis(
+    ticker: str,
+    base_thesis: str,
+    sector: Optional[str] = None,
+    bull_case: Optional[str] = None,
+    bear_case: Optional[str] = None,
+    kpis_json: Optional[list] = None,
+    triggers_json: Optional[list] = None,
+) -> UUID:
+    """Insert or update an investment thesis for a ticker."""
+    import json as _json
+    with get_db_cursor() as cursor:
+        # Upsert: delete old thesis for ticker, insert new
+        cursor.execute("DELETE FROM thesis WHERE ticker = %(t)s", {"t": ticker})
+        cursor.execute(
+            """
+            INSERT INTO thesis
+                (ticker, sector, base_thesis, bull_case, bear_case,
+                 kpis_json, triggers_json)
+            VALUES
+                (%(ticker)s, %(sector)s, %(base)s, %(bull)s, %(bear)s,
+                 %(kpis)s, %(triggers)s)
+            RETURNING id
+            """,
+            {
+                "ticker": ticker,
+                "sector": sector,
+                "base": base_thesis,
+                "bull": bull_case,
+                "bear": bear_case,
+                "kpis": _json.dumps(kpis_json or []),
+                "triggers": _json.dumps(triggers_json or []),
+            },
+        )
+        result = cursor.fetchone()
+        return result["id"]
+
+
+def get_thesis(ticker: str) -> Optional[dict[str, Any]]:
+    """Get the current thesis for a ticker."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM thesis WHERE ticker = %(t)s ORDER BY updated_at DESC LIMIT 1",
+            {"t": ticker},
+        )
+        return cursor.fetchone()
+
+
+def update_thesis_status(ticker: str, status: str) -> None:
+    """Update thesis status (on_track / at_risk / broken)."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            "UPDATE thesis SET status = %(s)s WHERE ticker = %(t)s",
+            {"s": status, "t": ticker},
+        )
+
+
+# ============================================
+# Pipeline Runs (Audit)
+# ============================================
+
+def start_pipeline_run(
+    ticker: str,
+    period: Optional[str] = None,
+    run_type: str = "pipeline",
+    config_snapshot: Optional[dict] = None,
+) -> UUID:
+    """Start a pipeline run for audit tracking. Returns run_id."""
+    import json as _json
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO pipeline_runs
+                (ticker, period, run_type, config_snapshot, status)
+            VALUES
+                (%(ticker)s, %(period)s, %(run_type)s, %(config)s, 'running')
+            RETURNING id
+            """,
+            {
+                "ticker": ticker,
+                "period": period,
+                "run_type": run_type,
+                "config": _json.dumps(config_snapshot or {}),
+            },
+        )
+        result = cursor.fetchone()
+        return result["id"]
+
+
+def complete_pipeline_run(
+    run_id: UUID,
+    status: str = "completed",
+    sources_json: Optional[list] = None,
+    row_counts_json: Optional[dict] = None,
+    error: Optional[str] = None,
+) -> None:
+    """Mark a pipeline run as completed/failed."""
+    import json as _json
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE pipeline_runs
+            SET status = %(status)s,
+                sources_json = %(sources)s,
+                row_counts_json = %(counts)s,
+                error = %(error)s,
+                completed_at = NOW()
+            WHERE id = %(id)s
+            """,
+            {
+                "id": run_id,
+                "status": status,
+                "sources": _json.dumps(sources_json or []),
+                "counts": _json.dumps(row_counts_json or {}),
+                "error": error,
+            },
+        )
+
+
+def get_pipeline_run(run_id: UUID) -> Optional[dict[str, Any]]:
+    """Get a pipeline run by ID."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            "SELECT * FROM pipeline_runs WHERE id = %(id)s",
+            {"id": run_id},
+        )
+        return cursor.fetchone()
+
+
+def get_pipeline_runs_for_ticker(
+    ticker: str, limit: int = 10
+) -> list[dict[str, Any]]:
+    """Get recent pipeline runs for a ticker."""
+    with get_db_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT * FROM pipeline_runs
+            WHERE ticker = %(t)s ORDER BY created_at DESC LIMIT %(l)s
+            """,
+            {"t": ticker, "l": limit},
+        )
+        return cursor.fetchall()
+

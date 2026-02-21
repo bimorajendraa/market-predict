@@ -272,10 +272,14 @@ def compute_rsi(df: pd.DataFrame, period: int = 14) -> dict:
 
     if rsi > 70:
         zone = "Overbought"
-    elif rsi < 30:
-        zone = "Oversold"
-    else:
+    elif rsi > 55:
+        zone = "Strong"
+    elif rsi > 45:
         zone = "Neutral"
+    elif rsi > 30:
+        zone = "Weak"
+    else:
+        zone = "Oversold"
 
     return {"rsi": round(rsi, 1), "rsi_zone": zone}
 
