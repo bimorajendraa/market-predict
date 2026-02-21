@@ -66,6 +66,84 @@ def run_memo_generation(
     from .generator import run_summary_generation
     summary = run_summary_generation(ticker, period, pipeline_results, technical_levels)
 
+    # ── Auto-populate evidence items from data sources used ──
+    evidence_items = []
+
+    # yfinance company info
+    if company_info.get("name") and company_info["name"] != ticker:
+        evidence_items.append({
+            "type": "market_data",
+            "source_url": f"https://finance.yahoo.com/quote/{ticker}",
+            "description": f"Company info: {company_info.get('name')}",
+            "fields": len([v for v in company_info.values() if v]),
+        })
+
+    # Factor model metrics
+    factor_coverage = factor_data.get("coverage_summary", {})
+    computed_metrics = factor_coverage.get("computed_metrics", 0)
+    if computed_metrics > 0:
+        evidence_items.append({
+            "type": "financial_data",
+            "source_url": f"https://finance.yahoo.com/quote/{ticker}/financials",
+            "description": f"Factor model: {computed_metrics} metrics computed",
+            "fields": computed_metrics,
+        })
+
+    # Valuation data
+    if valuation_data.get("status") == "success":
+        evidence_items.append({
+            "type": "valuation",
+            "source_url": f"https://finance.yahoo.com/quote/{ticker}/analysis",
+            "description": f"Valuation: {valuation_data.get('verdict', 'N/A')}",
+            "fields": len(valuation_data.get("multiples", {})),
+        })
+
+    # DB table row counts
+    try:
+        from ..db import get_db_cursor
+        with get_db_cursor() as cur:
+            for table, label in [
+                ("market_prices", "price_history"),
+                ("news_sentiment", "news_sentiment"),
+                ("financial_facts", "financial_facts"),
+            ]:
+                cur.execute(
+                    f"SELECT COUNT(*) as c FROM {table} WHERE ticker = %(t)s",
+                    {"t": ticker},
+                )
+                cnt = cur.fetchone()["c"]
+                if cnt > 0:
+                    evidence_items.append({
+                        "type": f"database_{label}",
+                        "source_url": f"db://{table}/{ticker}",
+                        "description": f"{label}: {cnt} rows",
+                        "fields": cnt,
+                    })
+    except Exception:
+        pass
+
+    # Technical analysis
+    if technical_levels and technical_levels.get("status") == "ok":
+        evidence_items.append({
+            "type": "technical_analysis",
+            "source_url": f"db://market_prices/{ticker}",
+            "description": "Technical analysis (S/R, Fibonacci, RSI, ATR)",
+            "fields": 5,
+        })
+
+    # News catalysts
+    news_count = len(news_data.get("top_catalysts", []))
+    if news_count > 0:
+        evidence_items.append({
+            "type": "news_catalysts",
+            "source_url": f"db://news_sentiment/{ticker}",
+            "description": f"News catalysts: {news_count} events",
+            "fields": news_count,
+        })
+
+    # Inject into summary so _build_section_evidence picks them up
+    summary["evidence_items"] = evidence_items
+
     # Gather style/positioning data
     positioning_data = _compute_positioning(
         ticker, factor_data, thesis_data, sector_data, coverage_data
@@ -111,7 +189,25 @@ def run_memo_generation(
     memo_lines.append("")
 
     # Section 8: Valuation
-    memo_lines.extend(_build_section_valuation(valuation_data, ticker))
+    val_section = _build_section_valuation(valuation_data, ticker)
+
+    # Consistency check: explain if premium valuation + buy rating
+    rating = summary.get("rating", "").upper()
+    verdict = valuation_data.get("verdict", "").upper()
+    if "PREMIUM" in verdict and rating in ("BUY", "STRONG BUY"):
+        val_section.append("")
+        val_section.append(
+            "  ⚠ NOTE: Rating is BUY despite PREMIUM valuation — "
+            "justified by strong growth and quality scores."
+        )
+    elif "DISCOUNT" in verdict and rating in ("SELL", "STRONG SELL"):
+        val_section.append("")
+        val_section.append(
+            "  ⚠ NOTE: Rating is SELL despite DISCOUNT valuation — "
+            "justified by deteriorating fundamentals or high risk."
+        )
+
+    memo_lines.extend(val_section)
     memo_lines.append("")
 
     # Section 9: Catalyst Calendar

@@ -253,7 +253,7 @@ def compute_moving_averages(df: pd.DataFrame) -> dict:
 
 
 def compute_rsi(df: pd.DataFrame, period: int = 14) -> dict:
-    """Compute RSI(14) and classify overbought/oversold/neutral."""
+    """Compute RSI using Wilder's smoothing (EWM) — consistent with model_trainer."""
     if len(df) < period + 1:
         return {}
 
@@ -261,8 +261,9 @@ def compute_rsi(df: pd.DataFrame, period: int = 14) -> dict:
     gain = delta.where(delta > 0, 0.0)
     loss = (-delta).where(delta < 0, 0.0)
 
-    avg_gain = gain.rolling(period).mean().iloc[-1]
-    avg_loss = loss.rolling(period).mean().iloc[-1]
+    # Wilder's smoothing: EWM with alpha=1/period (matches model_trainer.py)
+    avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean().iloc[-1]
+    avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean().iloc[-1]
 
     if avg_loss == 0:
         rsi = 100.0

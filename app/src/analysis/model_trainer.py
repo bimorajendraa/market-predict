@@ -13,7 +13,7 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import TimeSeriesSplit
 
 from ..db import get_db_cursor
@@ -138,7 +138,15 @@ def fetch_training_data(ticker: str) -> pd.DataFrame:
         sent_df = pd.DataFrame()
 
     # Merge Sentiment (Left Join)
-    df = df.join(sent_df, how="left")
+    if not sent_df.empty:
+        df = df.join(sent_df, how="left")
+
+    # Ensure columns exist even if no sentiment data was available
+    if "sentiment_score" not in df.columns:
+        df["sentiment_score"] = 0.0
+    if "news_count" not in df.columns:
+        df["news_count"] = 0
+
     df["sentiment_score"] = df["sentiment_score"].fillna(0.0).astype(float)
     df["news_count"] = df["news_count"].fillna(0).astype(int)
 
@@ -163,7 +171,12 @@ def fetch_training_data(ticker: str) -> pd.DataFrame:
         score_df = pd.DataFrame()
 
     # Merge Scores (ffill)
-    df = df.join(score_df, how="left")
+    if not score_df.empty:
+        df = df.join(score_df, how="left")
+
+    if "score" not in df.columns:
+        df["score"] = 50.0
+
     df["score"] = df["score"].ffill().fillna(50.0).astype(float)  # Default neutral score
 
     return df
@@ -176,14 +189,15 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
-    # 1. Momentum: RSI (14)
+    # 1. Momentum: RSI (14) — Wilder's smoothing (EWM)
     delta = df["close"].diff()
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    
-    avg_gain = gain.rolling(window=14, min_periods=14).mean()
-    avg_loss = loss.rolling(window=14, min_periods=14).mean()
-    
+    gain = delta.where(delta > 0, 0.0)
+    loss = (-delta).where(delta < 0, 0.0)
+
+    # Wilder's smoothing: EWM with alpha=1/period
+    avg_gain = gain.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+
     rs = avg_gain / (avg_loss + 1e-9)
     df["RSI_14"] = 100 - (100 / (1 + rs))
 
@@ -192,6 +206,7 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
     exp26 = df["close"].ewm(span=26, adjust=False).mean()
     df["MACD_12_26_9"] = exp12 - exp26
     df["MACDs_12_26_9"] = df["MACD_12_26_9"].ewm(span=9, adjust=False).mean()
+    df["MACDh_12_26_9"] = df["MACD_12_26_9"] - df["MACDs_12_26_9"]
 
     # 2. Volatility: ATR (14) & BBands (20, 2)
     # ATR
@@ -275,12 +290,42 @@ def create_labels(df: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
     return df
 
 
+def _validate_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Data sanity checks on OHLCV data.
+    Logs warnings and drops anomalous rows.
+    """
+    n_before = len(df)
+
+    # high must be >= max(open, close); low must be <= min(open, close)
+    bad_high = df["high"] < df[["open", "close"]].max(axis=1)
+    bad_low = df["low"] > df[["open", "close"]].min(axis=1)
+    bad_vol = df["volume"] < 0
+
+    bad_mask = bad_high | bad_low | bad_vol
+    n_bad = bad_mask.sum()
+
+    if n_bad > 0:
+        logger.warning(
+            f"OHLCV sanity: {n_bad}/{n_before} rows have anomalous data "
+            f"(bad_high={bad_high.sum()}, bad_low={bad_low.sum()}, "
+            f"bad_vol={bad_vol.sum()}). Dropping them."
+        )
+        df = df[~bad_mask].copy()
+
+    return df
+
+
 def train_model(ticker: str) -> dict:
     """
     Fetch data, engineer features, and train LightGBM model.
     Auto-fetches extended historical data if DB has insufficient rows.
     Saves model to disk.
     """
+    # Set seed for reproducibility
+    SEED = 42
+    np.random.seed(SEED)
+
     logger.info(f"Starting model training for {ticker}")
 
     # 0. Ensure enough historical data exists
@@ -304,23 +349,40 @@ def train_model(ticker: str) -> dict:
     if len(raw_df) < 60:
         logger.warning("Insufficient data for training (need > 60 days)")
         return {"status": "failed", "reason": "Insufficient data"}
-        
+
+    # Data sanity checks
+    raw_df = _validate_ohlcv(raw_df)
+
     df = engineer_features(raw_df)
     df = create_labels(df, horizon=5)
-    
+
     # Drop rows with NaN targets (last 5 days) or NaN features
     train_df = df.dropna().copy()
-    
+
     if len(train_df) < 50:
         logger.warning(f"Not enough training samples after cleaning: {len(train_df)}")
         return {"status": "failed", "reason": "Insufficient samples"}
-        
+
     # Features (Exclude Target and auxiliary columns)
-    exclude_cols = ["open", "high", "low", "close", "volume", "Future_Close", "Future_Return", "Target", "date", "day"]
+    exclude_cols = [
+        "open", "high", "low", "close", "volume",
+        "Future_Close", "Future_Return", "Target",
+        "date", "day",
+    ]
     feature_cols = [c for c in train_df.columns if c not in exclude_cols]
-    
+
+    # Leakage guard — fail hard if future-looking columns leaked into features
+    leakage_cols = [c for c in feature_cols if "Future_" in c or c == "Target"]
+    assert not leakage_cols, (
+        f"DATA LEAKAGE DETECTED! These columns must not be features: {leakage_cols}"
+    )
+
     X = train_df[feature_cols]
     y = train_df["Target"].astype(int)
+
+    # Log class distribution
+    class_dist = y.value_counts().sort_index()
+    logger.info(f"Class distribution:\n{class_dist.to_string()}")
     
     # 2. Train with TimeSeriesSplit
     tscv = TimeSeriesSplit(n_splits=3)
@@ -334,9 +396,13 @@ def train_model(ticker: str) -> dict:
         'learning_rate': 0.05,
         'feature_fraction': 0.9,
         'verbose': -1,
+        'seed': SEED,
+        'bagging_seed': SEED,
+        'feature_fraction_seed': SEED,
     }
     
     fold_accuracies = []
+    fold_f1_scores = []
     models = []
     
     logger.info(f"Training on {len(X)} samples with {len(feature_cols)} features...")
@@ -362,11 +428,14 @@ def train_model(ticker: str) -> dict:
         preds = bst.predict(X_val)
         pred_labels = np.argmax(preds, axis=1)
         acc = accuracy_score(y_val, pred_labels)
+        f1 = f1_score(y_val, pred_labels, average='macro', zero_division=0)
         fold_accuracies.append(acc)
+        fold_f1_scores.append(f1)
         models.append(bst)
-        
+
     avg_acc = np.mean(fold_accuracies)
-    logger.info(f"Average CV Accuracy: {avg_acc:.2%}")
+    avg_f1 = np.mean(fold_f1_scores)
+    logger.info(f"Average CV Accuracy: {avg_acc:.2%} | Macro-F1: {avg_f1:.4f}")
     
     # 3. Final Training on Full Data
     full_train_data = lgb.Dataset(X, label=y)
@@ -384,7 +453,8 @@ def train_model(ticker: str) -> dict:
             "model": final_model,
             "features": feature_cols,
             "timestamp": datetime.now().isoformat(),
-            "metrics": {"cv_accuracy": avg_acc}
+            "metrics": {"cv_accuracy": avg_acc, "cv_macro_f1": avg_f1},
+            "class_distribution": class_dist.to_dict(),
         }, f)
         
     logger.info(f"Model saved to {save_path}")
@@ -393,7 +463,9 @@ def train_model(ticker: str) -> dict:
         "status": "success",
         "path": str(save_path),
         "accuracy": avg_acc,
-        "top_features": top_features
+        "macro_f1": avg_f1,
+        "top_features": top_features,
+        "class_distribution": class_dist.to_dict(),
     }
 
 if __name__ == "__main__":

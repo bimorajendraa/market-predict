@@ -76,11 +76,24 @@ def predict_latest(ticker: str) -> Dict[str, Any]:
     # Check if data is stale (warning only)
     # 
     
-    # 3. Prepare Feature Vector — fill missing features with 0
-    for col in feature_cols:
-        if col not in latest_row.columns:
-            logger.warning(f"Missing feature '{col}' in prediction data — filling with 0")
-            latest_row[col] = 0.0
+    # 3. Prepare Feature Vector — fail-fast if too many features missing
+    missing_features = [col for col in feature_cols if col not in latest_row.columns]
+    missing_pct = len(missing_features) / len(feature_cols) if feature_cols else 0
+
+    if missing_pct > 0.20:
+        logger.error(
+            f"Feature mismatch: {len(missing_features)}/{len(feature_cols)} features missing "
+            f"({missing_pct:.0%}). Missing: {missing_features}. Retrain the model."
+        )
+        return {
+            "signal": "Error", "confidence": 0.0,
+            "reason": f"Feature mismatch ({len(missing_features)} missing)",
+            "missing_features": missing_features,
+        }
+
+    for col in missing_features:
+        logger.warning(f"Missing feature '{col}' in prediction data — filling with 0")
+        latest_row[col] = 0.0
 
     try:
         X_latest = latest_row[feature_cols].fillna(0)
@@ -109,7 +122,7 @@ def predict_latest(ticker: str) -> Dict[str, Any]:
                 break
     
     stop_loss = None
-    if atr_val and not np.isnan(atr_val):
+    if atr_val is not None and not np.isnan(atr_val):
         if pred_class >= 3: # Buy/Strong Buy
             stop_loss = close_price - (2.0 * atr_val)
         elif pred_class <= 1: # Sell/Strong Sell
@@ -120,8 +133,8 @@ def predict_latest(ticker: str) -> Dict[str, Any]:
         "date": latest_date.isoformat(),
         "signal": signal,
         "confidence": round(confidence, 2),
-        "stop_loss": round(stop_loss, 2) if stop_loss else None,
-        "atr": round(atr_val, 2) if atr_val and not np.isnan(atr_val) else None,
+        "stop_loss": round(stop_loss, 2) if stop_loss is not None else None,
+        "atr": round(atr_val, 2) if atr_val is not None and not np.isnan(atr_val) else None,
         "features": {k: float(v) for k, v in X_latest.iloc[0].to_dict().items() if k in ["RSI_14", "MACD_12_26_9", "VOL_REL"]}
     }
 

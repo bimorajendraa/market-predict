@@ -1,7 +1,7 @@
 ════════════════════════════════════════════════════════════
   INVESTMENT MEMO: BMRI.JK
   Period: Q4-2025
-  Date: 2026-02-20 03:25 WIB
+  Date: 2026-02-21 20:17 WIB
 ════════════════════════════════════════════════════════════
 
 Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
@@ -13,14 +13,14 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
   Sector: Financial Services — Banks - Regional
   Country: Indonesia
   Employees: 38,751
-  Market Cap: $473.7T
+  Market Cap: $478.3T
   Website: https://bankmandiri.co.id
 
   PT Bank Mandiri (Persero) Tbk provides various banking products and services to individuals and businesses in Indonesia, Singapore, Malaysia, Hong Kong, Timor Leste, Shanghai, England, and the Cayman Islands. It offers savings and current accounts, multicurrency, payroll, NOW, and foreign currency s...
 
 2. INVESTMENT THESIS
 ────────────────────────────────────────
-  Status: ON TRACK
+  Status: INSUFFICIENT DATA
 
   BASE: Quality banking company with sustainable competitive advantages.
   BULL: Strong NIM expansion with controlled credit costs and digital banking gains.
@@ -32,27 +32,27 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
 
 3. VARIANT VIEW
 ────────────────────────────────────────
-  Current Price: $5075.00
+  Current Price: $5125.00
 
   BASE CASE (60% probability):
     Revenue growth: 12.8% (continues current trajectory)
     Op margin: 58.8% (stable)
-    Price target: $5582.50 (+10%)
+    Price target: $5637.50 (+10%)
     Thesis: Quality banking company with sustainable competitive advantages.
 
   BULL CASE (25% probability):
     Revenue growth: 19.2% (accelerates)
     Op margin: 61.8% (+300bp expansion)
-    Price target: $6597.50 (+30%)
+    Price target: $6662.50 (+30%)
     Thesis: Strong NIM expansion with controlled credit costs and digital banking gains.
 
   BEAR CASE (15% probability):
     Revenue growth: 3.8% (decelerates materially)
     Op margin: 53.8% (-500bp compression)
-    Price target: $3806.25 (-25%)
+    Price target: $3843.75 (-25%)
     Thesis: Rising NPLs, NIM compression from rate cuts, fintech competition eroding deposits.
 
-  PROBABILITY-WEIGHTED TARGET: $5569.81 (+9.8%)
+  PROBABILITY-WEIGHTED TARGET: $5624.69 (+9.8%)
 
 4. KEY QUESTIONS
 ────────────────────────────────────────
@@ -97,9 +97,9 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
     ▲ Eps Growth: 34.90% (score: 100)
     ▼ Cfo To Net Income: -348.28% (score: 0)
     ▲ Capex Intensity: 5.18% (score: 83)
-    ▲ Dividend Yield: 197.00% (score: 100)
+    ▲ Dividend Yield: 30.00% (score: 100)
     ▼ Payout Ratio: 93.86% (score: 0)
-    ─ Buyback Yield: 0.09% (score: 31)
+    ─ Buyback Yield: 0.08% (score: 31)
     ─ Dilution: 0.00% (score: 53)
 
   ⚠ COVERAGE CONTRACT FAILED
@@ -129,11 +129,11 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
   Verdict: FAIR
 
   CURRENT MULTIPLES:
-    PE/TRAILING: 8.4x
+    PE/TRAILING: 8.5x
     PE/FORWARD: 7.7x
     PB/RATIO: 1.6x
     EV/REVENUE: 4.2x
-    DIVIDEND/YIELD: 2.0x
+    DIVIDEND/YIELD: 1.9x
 
   3-STATEMENT MODEL (current: Rev $144817.49B, OpM 58.8%, NetM 38.9%):
   Year      Revenue   OpIncome   OpM%  NetIncome        FCF  Growth
@@ -146,7 +146,7 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
   Assumptions: growth=12.8%, tax=21%, target_margin=40.0%
 
 
-  SENSITIVITY TABLE (current: $5075.0, base FCF/sh: $155.16):
+  SENSITIVITY TABLE (current: $5125.0, base FCF/sh: $155.16):
   WACC       g=1.0%     g=2.0%     g=2.5%     g=3.0%     g=4.0%
   ────── ────────── ────────── ────────── ────────── ──────────
   8%     $ 3668.08 $ 4163.97 $ 4479.54 $ 4858.22 $ 5899.59
@@ -184,7 +184,7 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
 
 11. TRACKING DASHBOARD
 ────────────────────────────────────────
-  Thesis Status: ON_TRACK
+  Thesis Status: INSUFFICIENT_DATA
 
   KPIs TO MONITOR:
     • Net Interest Margin: — (target: > 3%)
@@ -205,12 +205,18 @@ Rating: Hold/Watch | Confidence: 25% | Integrity: N/A
 
 12. EVIDENCE APPENDIX
 ────────────────────────────────────────
-  No evidence items collected.
+  Sources (6): Tier A: 0 | Tier B: 3 | Tier C: 3
+    [Tier B][market_data] https://finance.yahoo.com/quote/BMRI.JK
+    [Tier B][financial_data] https://finance.yahoo.com/quote/BMRI.JK/financials
+    [Tier B][valuation] https://finance.yahoo.com/quote/BMRI.JK/analysis
+    [Tier C][database_price_history] db://market_prices/BMRI.JK
+    [Tier C][database_financial_facts] db://financial_facts/BMRI.JK
+    [Tier C][news_catalysts] db://news_sentiment/BMRI.JK
 
   AUDIT TRAIL:
-    Run ID: cab066e6-c61c-4592-a690-7450d6982584
+    Run ID: c7769bab-9297-4153-b8a5-4554ca0cc3f7
     Sources used: 0
 
-  Generated: 2026-02-20 03:25:27 WIB
+  Generated: 2026-02-21 20:17:39 WIB
   Disclaimer: This memo is auto-generated. Verify all data before investment decisions.
 ════════════════════════════════════════════════════════════

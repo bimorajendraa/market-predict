@@ -1,7 +1,7 @@
 ════════════════════════════════════════════════════════════
   INVESTMENT MEMO: TOWR.JK
   Period: Q4-2025
-  Date: 2026-02-19 11:59 WIB
+  Date: 2026-02-21 20:19 WIB
 ════════════════════════════════════════════════════════════
 
 Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
@@ -13,7 +13,7 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
   Sector: Real Estate — Real Estate Services
   Country: Indonesia
   Employees: 1,884
-  Market Cap: $30.7T
+  Market Cap: $30.4T
   Website: https://www.ptsmn.co.id
 
   PT Sarana Menara Nusantara Tbk. owns and operates telecommunication towers for wireless operators in Indonesia. It operates in two segments, Tower Rental, and Other Services
@@ -32,27 +32,27 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
 
 3. VARIANT VIEW
 ────────────────────────────────────────
-  Current Price: $520.00
+  Current Price: $515.00
 
   BASE CASE (60% probability):
     Revenue growth: -0.1% (continues current trajectory)
     Op margin: 57.6% (stable)
-    Price target: $572.00 (+10%)
+    Price target: $566.50 (+10%)
     Thesis: Quality real_estate company with sustainable competitive advantages.
 
   BULL CASE (25% probability):
     Revenue growth: 9.9% (accelerates)
     Op margin: 60.6% (+300bp expansion)
-    Price target: $676.00 (+30%)
+    Price target: $669.50 (+30%)
     Thesis: Solid fundamentals with consistent execution and market position.
 
   BEAR CASE (15% probability):
     Revenue growth: -0.0% (decelerates materially)
     Op margin: 52.6% (-500bp compression)
-    Price target: $390.00 (-25%)
+    Price target: $386.25 (-25%)
     Thesis: Growth deceleration, margin pressure, and rising competitive threats.
 
-  PROBABILITY-WEIGHTED TARGET: $570.70 (+9.8%)
+  PROBABILITY-WEIGHTED TARGET: $565.21 (+9.7%)
 
 4. KEY QUESTIONS
 ────────────────────────────────────────
@@ -83,7 +83,7 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
   Quality               67.0        5/5
   Growth                11.0        3/4
   Balance Sheet         33.2        3/4
-  Cashflow              57.1        4/4
+  Cashflow              57.3        4/4
   Shareholder            nan        4/4
 
   KEY METRICS:
@@ -101,8 +101,8 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
     ─ Fcf Margin: 12.77% (score: 57)
     ▲ Cfo To Net Income: 292.11% (score: 100)
     ▼ Capex Intensity: 34.83% (score: 7)
-    ─ Fcf Yield: 5.39% (score: 54)
-    ▲ Dividend Yield: 319.00% (score: 100)
+    ─ Fcf Yield: 5.45% (score: 54)
+    ▲ Dividend Yield: 30.00% (score: 100)
     ▼ Payout Ratio: 23.73% (score: 19)
     ─ Buyback Yield: nan (score: nan)
     ─ Dilution: 0.48% (score: 42)
@@ -131,12 +131,12 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
   Verdict: DISCOUNT
 
   CURRENT MULTIPLES:
-    PE/TRAILING: 7.8x
-    PE/FORWARD: 7.3x
+    PE/TRAILING: 7.7x
+    PE/FORWARD: 7.2x
     PB/RATIO: 1.1x
-    EV/EBITDA: 7.9x
-    EV/REVENUE: 5.8x
-    DIVIDEND/YIELD: 3.2x
+    EV/EBITDA: 7.8x
+    EV/REVENUE: 5.7x
+    DIVIDEND/YIELD: 3.3x
     FCF/YIELD: 0.1x
 
   3-STATEMENT MODEL (current: Rev $12973.48B, OpM 57.6%, NetM 26.5%):
@@ -150,12 +150,12 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
   Assumptions: growth=-0.1%, tax=21%, target_margin=40.0%
 
   DCF INTRINSIC VALUE:
-    BEAR: $278.69 (-46.4%) [WACC=12.0%, g=1.0%]
-    BASE: $397.44 (-23.6%) [WACC=10.0%, g=3.0%]
-    BULL: $605.19 (+16.4%) [WACC=9.0%, g=8.0%]
-    Current Price: $520.0
+    BEAR: $278.69 (-45.9%) [WACC=12.0%, g=1.0%]
+    BASE: $397.44 (-22.8%) [WACC=10.0%, g=3.0%]
+    BULL: $605.19 (+17.5%) [WACC=9.0%, g=8.0%]
+    Current Price: $515.0
 
-  SENSITIVITY TABLE (current: $520.0, base FCF/sh: $28.47):
+  SENSITIVITY TABLE (current: $515.0, base FCF/sh: $28.47):
   WACC       g=1.0%     g=2.0%     g=2.5%     g=3.0%     g=4.0%
   ────── ────────── ────────── ────────── ────────── ──────────
   8%     $  447.85 $  505.60 $  542.36 $  586.47 $  707.76
@@ -165,7 +165,7 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
   12%    $  283.44 $  302.51 $  313.55 $  325.81 $  354.95
 
   HISTORICAL CONTEXT (5Y):
-    price_percentiles: current=N/A, median=902.68
+    price_percentiles: current=N/A, median=901.71
 
 9. CATALYST CALENDAR
 ────────────────────────────────────────
@@ -196,11 +196,11 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
   Thesis Status: ON_TRACK
 
   KPIs TO MONITOR:
-    • Revenue growth (YoY): — (target: > 5%)
-    • Operating margin: — (target: > 10%)
-    • ROE: — (target: > 12%)
-    • Debt-to-equity: — (target: < 1.0)
-    • Free cash flow: — (target: > 5%)
+    • Revenue growth (YoY): -0.10% (target: > 5%)
+    • Operating margin: 57.61% (target: > 10%)
+    • ROE: 15.43% (target: > 12%)
+    • Debt-to-equity: 171.94% (target: < 1.0)
+    • Free cash flow: 12.77% (target: > 5%)
 
   WHAT WOULD CHANGE OUR MIND:
     [CRITICAL] If revenue decline 2 consecutive quarters → Downgrade thesis
@@ -212,12 +212,19 @@ Rating: Hold/Watch | Confidence: 40% | Integrity: N/A
 
 12. EVIDENCE APPENDIX
 ────────────────────────────────────────
-  No evidence items collected.
+  Sources (7): Tier A: 0 | Tier B: 3 | Tier C: 4
+    [Tier B][market_data] https://finance.yahoo.com/quote/TOWR.JK
+    [Tier B][financial_data] https://finance.yahoo.com/quote/TOWR.JK/financials
+    [Tier B][valuation] https://finance.yahoo.com/quote/TOWR.JK/analysis
+    [Tier C][database_price_history] db://market_prices/TOWR.JK
+    [Tier C][database_news_sentiment] db://news_sentiment/TOWR.JK
+    [Tier C][database_financial_facts] db://financial_facts/TOWR.JK
+    [Tier C][news_catalysts] db://news_sentiment/TOWR.JK
 
   AUDIT TRAIL:
-    Run ID: 5116a237-27c9-4318-a52a-4f37cbe7b4be
+    Run ID: 3aadcaba-13f9-49e1-a907-70df7dfacb78
     Sources used: 0
 
-  Generated: 2026-02-19 11:59:38 WIB
+  Generated: 2026-02-21 20:19:13 WIB
   Disclaimer: This memo is auto-generated. Verify all data before investment decisions.
 ════════════════════════════════════════════════════════════
